@@ -1,4 +1,4 @@
-The StridedView.jl package is licensed under the MIT "Expat" License:
+The Strided.jl package is licensed under the MIT "Expat" License:
 
 > Copyright (c) 2017: Jutho Haegeman.
 >
