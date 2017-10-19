@@ -45,7 +45,7 @@ end
 @propagate_inbounds Base.getindex(a::StridedView, I::ParentIndex) = getindex(a.parent, I.i)
 @propagate_inbounds Base.setindex!(a::StridedView, v, I::ParentIndex) = (setindex!(a.parent, v, I.i); return a)
 
-Base.similar(a::StridedView, args...) = similar(a.parent, args...)
+Base.similar(a::StridedView, args...) = StridedView(similar(a.parent, args...))
 
 # Specialized methods for `StridedView`
 function Base.permutedims(a::StridedView{<:Any,N}, p) where {N}
@@ -80,6 +80,15 @@ function splitdims(a::StridedView, s1::Pair{Int,SizeType}, s2::Pair{Int,SizeType
     args = permute((s1, s2, S...), p)
     splitdims(splitdims(a, args[1]), tail(args)...)
 end
+
+# Methods based on map!
+Base.copy!(dst::StridedView{<:Any,N}, src::StridedView{<:Any,N}) where {N} = map!(identity, dst, src)
+Base.scale!(dst::StridedView{<:Any,N}, α, src::StridedView{<:Any,N}) where {N} = map!(x->α*x, dst, src)
+Base.scale!(dst::StridedView{<:Any,N}, src::StridedView{<:Any,N}, α) where {N} = map!(x->x*α, dst, src)
+Base.LinAlg.axpy!(a, X::StridedView{<:Any,N}, Y::StridedView{<:Any,N}) where {N} = map!((x,y)->(a*x+y), dst, src, dst)
+Base.conj!(a::StridedView) = map!(conj, a, a)
+
+Base.transpose(a::StridedView{<:Any,2}) = permutedims(a,(2,1))
 
 # Auxiliary routines
 @inline _computeind(indices::Tuple{}, strides::Tuple{}) = 1
