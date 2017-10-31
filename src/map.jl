@@ -1,4 +1,6 @@
-Base.map!(f::F, b::StridedView{<:Any,N}, a1::StridedView{<:Any,N}, A::Vararg{StridedView{<:Any,N}}) where {F,N} = mapi!(f, b, a1, A...)
+@inline Base.map!(f::F, b::StridedView{<:Any,N}, a1::StridedView{<:Any,N}, A::Vararg{StridedView{<:Any,N}}) where {F,N} = mapr!(f, b, a1, A...)
+Base.broadcast!(f, b::StridedView{<:Any,N}, a1::StridedView{<:Any,N}, A::Vararg{StridedView{<:Any,N}}) where {N} = map!(f, b, a1, A...)
+
 function mapr!(f::F, b::StridedView{<:Any,N}, a1::StridedView{<:Any,N}, A::Vararg{StridedView{<:Any,N}}) where {F,N}
     dims = size(b)
     # Check dimesions
@@ -8,12 +10,15 @@ function mapr!(f::F, b::StridedView{<:Any,N}, a1::StridedView{<:Any,N}, A::Varar
     end
 
     # Sort loops based on minimal memory jumps
-    allstrides = map(strides, (b, a1, A...))
+    As = (b, a1, A...)
+    allstrides = map(strides, As)
     minstrides = map(min, allstrides...)
-    p = TupleTools._sortperm(map((d,s)->(d-1)*s, dims, minstrides))
+    p = TupleTools._sortperm((dims .- 1) .* minstrides)
     dims = TupleTools.getindices(dims, p)
     minstrides = TupleTools.getindices(minstrides, p)
-    allstrides = map(s->TupleTools.getindices(s, p), allstrides)
+    allstrides = let q = p
+        map(s->TupleTools.getindices(s, q), allstrides)
+    end
 
     # Fuse dimensions if possible
     for i = N:-1:2
@@ -29,9 +34,22 @@ function mapr!(f::F, b::StridedView{<:Any,N}, a1::StridedView{<:Any,N}, A::Varar
             dims = setindex(dims, 1, i)
         end
     end
-    map_recursive!(f, dims, minstrides, (b, a1, A...), allstrides)
+    offsets = map(offset, As)
+    if Threads.nthreads() == 1
+        map_recursive!(f, dims, minstrides, As, allstrides, offsets)
+    else
+        n = Threads.nthreads()
+        threadblocks, threadoffsets = _computethreadblocks(n, dims, minstrides, allstrides, offsets)
+        _maprt!(threadblocks, threadoffsets, f, minstrides, As, allstrides)
+    end
     return b
 end
+@noinline function _maprt!(threadblocks, threadoffsets, f, minstrides, As, allstrides)
+    @inbounds Threads.@threads for i = 1:length(threadblocks)
+        map_recursive!(f, threadblocks[i], minstrides, As, allstrides, threadoffsets[i])
+    end
+end
+
 function mapi!(f::F, b::StridedView{<:Any,N}, a1::StridedView{<:Any,N}, A::Vararg{StridedView{<:Any,N}}) where {F,N}
     dims = size(b)
     # Check dimesions
@@ -41,12 +59,15 @@ function mapi!(f::F, b::StridedView{<:Any,N}, a1::StridedView{<:Any,N}, A::Varar
     end
 
     # Sort loops based on minimal memory jumps
-    allstrides = map(strides, (b, a1, A...))
+    As = (b, a1, A...)
+    allstrides = map(strides, As)
     minstrides = map(min, allstrides...)
-    p = TupleTools._sortperm(map((d,s)->(d-1)*s, dims, minstrides))
+    p = TupleTools._sortperm((dims .- 1) .* minstrides)
     dims = TupleTools.getindices(dims, p)
     minstrides = TupleTools.getindices(minstrides, p)
-    allstrides = map(s->TupleTools.getindices(s, p), allstrides)
+    allstrides = let q = p
+        map(s->TupleTools.getindices(s, q), allstrides)
+    end
 
     # Fuse dimensions if possible
     for i = N:-1:2
@@ -64,15 +85,27 @@ function mapi!(f::F, b::StridedView{<:Any,N}, a1::StridedView{<:Any,N}, A::Varar
     end
 
     blocks = _computeblocks(dims, minstrides, allstrides)
-    map_iterative!(f, dims, blocks, (b, a1, A...), allstrides)
+    offsets = map(offset, As)
+    if Threads.nthreads() == 1 || prod(dims) < Threads.nthreads()*prod(blocks)
+        map_iterative!(f, dims, blocks, As, allstrides, offsets)
+    else
+        n = Threads.nthreads()
+        threadblocks, threadoffsets = _computethreadblocks(n, dims, minstrides, allstrides, offsets)
+        _mapit!(threadblocks, threadoffsets, f, blocks, As, allstrides)
+    end
     return b
+end
+@noinline function _mapit!(threadblocks, threadoffsets, f, blocks, As, allstrides)
+    @inbounds Threads.@threads for i = 1:length(threadblocks)
+        map_iterative!(f, threadblocks[i], blocks, As, allstrides, threadoffsets[i])
+    end
 end
 
 const BLOCKSIZE = 1024
-function map_recursive!(f::F, dims::NTuple{N,Int}, minstrides::NTuple{N,Int}, arrs::NTuple{M,StridedView{<:Any,N}}, arrstrides::NTuple{M,NTuple{N,Int}}, offsets::NTuple{M,Int} = map(offset, arrs)) where {F,N,M}
+function map_recursive!(f::F, dims::NTuple{N,Int}, minstrides::NTuple{N,Int}, arrs::NTuple{M,StridedView{<:Any,N}}, arrstrides::NTuple{M,NTuple{N,Int}}, offsets::NTuple{M,Int}) where {F,N,M}
     l = TupleTools.prod(dims)
     if l <= BLOCKSIZE || (dims[1] == l && all(equalto(1), map(TupleTools.indmin, arrstrides)))
-        map_kernel!(f, dims, arrs, arrstrides, offsets)
+        map_rkernel!(f, dims, arrs, arrstrides, offsets)
     else
         i = TupleTools.indmax( (dims .- 1) .* minstrides )
         diold = dims[i]
@@ -88,7 +121,7 @@ function map_recursive!(f::F, dims::NTuple{N,Int}, minstrides::NTuple{N,Int}, ar
     return arrs[1]
 end
 
-@generated function map_kernel!(f::F, dims::NTuple{N,Int}, arrs::NTuple{M,StridedView{<:Any,N}}, arrstrides::NTuple{M,NTuple{N,Int}}, offsets::NTuple{M,Int}) where {F,N,M}
+@generated function map_rkernel!(f::F, dims::NTuple{N,Int}, arrs::NTuple{M,StridedView{<:Any,N}}, arrstrides::NTuple{M,NTuple{N,Int}}, offsets::NTuple{M,Int}) where {F,N,M}
     loopvars = [gensym() for k = 1:N]
     stridesym = [Symbol("strides_$(i)_$(j)") for i = 1:N, j=1:M]
     Isym = [Symbol("I_$(j)") for j=1:M]
@@ -121,7 +154,7 @@ end
     end
 end
 
-@generated function map_iterative!(f::F, dims::NTuple{N,Int}, blocks::NTuple{N,Int}, As::NTuple{M,StridedView{<:Any,N}}, strides::NTuple{M,NTuple{N,Int}}) where {F,N,M}
+@generated function map_iterative!(f::F, dims::NTuple{N,Int}, blocks::NTuple{N,Int}, As::NTuple{M,StridedView{<:Any,N}}, strides::NTuple{M,NTuple{N,Int}}, offsets::NTuple{M,Int}) where {F,N,M}
     blockloopvars = [Symbol("J$i") for i = 1:N]
     blockdimvars = [Symbol("d$i") for i = 1:N]
     innerloopvars = [Symbol("j$i") for i = 1:N]
@@ -129,7 +162,7 @@ end
     stridevars = [Symbol("stride_$(i)_$(j)") for i = 1:N, j = 1:M]
     Ivars = [Symbol("I$j") for j = 1:M]
     pre1 = Expr(:block, [:($(stridevars[i,j]) = strides[$j][$i]) for i = 1:N, j=1:M]...)
-    pre2 = Expr(:block, [:($(Ivars[j]) = offset(As[$j])+1) for j = 1:M]...)
+    pre2 = Expr(:block, [:($(Ivars[j]) = offsets[$j]+1) for j = 1:M]...)
 
     ex = :(As[1][ParentIndex($(Ivars[1]))] = f($([:(As[$j][ParentIndex($(Ivars[j]))]) for j = 2:M]...)))
     if N >= 1
@@ -179,13 +212,57 @@ function _computeblocks(dims::NTuple{N,Int}, minstrides::NTuple{N,Int}, allstrid
     else
         blocks = dims
         while prod(blocks) >= 2*blocksize
-            i = indmax(map((d,s)->(d-1)*s, blocks, minstrides))
+            i = TupleTools.indmax((blocks .- 1).*minstrides)
             blocks = setindex(blocks, (blocks[i]+1)>>1, i)
         end
         while prod(blocks) > blocksize
-            i = indmax(map((d,s)->(d-1)*s, blocks, minstrides))
+            i = TupleTools.indmax((blocks .- 1).*minstrides)
             blocks = setindex(blocks, blocks[i]-1, i)
         end
         return blocks
     end
+end
+function _computethreadblocks(n::Int, dims::NTuple{N,Int}, minstrides::NTuple{N,Int}, allstrides::NTuple{M,NTuple{N,Int}}, offsets::NTuple{M,Int}) where {N,M}
+    factors = reverse!(simpleprimefactorization(n))
+
+    threadblocks = [dims]
+    threadoffsets = [offsets]
+    for k in factors
+        l = length(threadblocks)
+        for j = 1:l
+            dims = shift!(threadblocks)
+            offsets = shift!(threadoffsets)
+            i = TupleTools.indmax((dims.-1).*minstrides)
+            ndi = div(dims[i], k)
+            newdims = setindex(dims, ndi, i)
+            stridesi = let j = i
+                map(s->s[j], allstrides)
+            end
+            for m = 1:k-1
+                push!(threadblocks, newdims)
+                push!(threadoffsets, offsets)
+                offsets = offsets .+ ndi.* stridesi
+            end
+            ndi = dims[i]-(k-1)*ndi
+            newdims = setindex(dims, ndi, i)
+            push!(threadblocks, newdims)
+            push!(threadoffsets, offsets)
+        end
+    end
+    return threadblocks, threadoffsets
+end
+
+function simpleprimefactorization(n::Int)
+    factors = Vector{Int}()
+    k = 2
+    while k <= n
+        d, r = divrem(n, k)
+        if r == 0
+            push!(factors, k)
+            n = d
+        else
+            k += 1
+        end
+    end
+    return factors
 end

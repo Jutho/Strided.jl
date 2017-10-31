@@ -1,5 +1,8 @@
-function sview(A::StridedArray{<:Any,N}, I::Vararg{Union{RangeIndex,Colon},N}) where {N}
-    StridedView(A, _computesize(size(A), I), _computestrides(strides(A), I), _computeoffset(strides(A), I))
+function sview(a::StridedArray{<:Any,N}, I::Vararg{Union{RangeIndex,Colon},N}) where {N}
+    StridedView(parent(a), _computesize(size(a), I), _computestrides(strides(a), I), offset(a) + _computeoffset(strides(a), I), identity)
+end
+function sview(a::StridedView{<:Any,N}, I::Vararg{Union{RangeIndex,Colon},N}) where {N}
+    StridedView(a.parent, _computesize(a.size, I), _computestrides(a.strides, I), a.offset + _computeoffset(a.strides, I), a.f)
 end
 
 @inline function _computesize(oldsize::NTuple{N,Int}, I::NTuple{N,Union{RangeIndex,Colon}}) where {N}

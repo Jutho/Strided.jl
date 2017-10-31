@@ -19,6 +19,15 @@ export StridedView, StridedIterator, BlockedIterator, splitdims, sview
     export equalto
 end
 
+@static if !isdefined(Base, :adjoint)
+    const adjoint = Base.ctranspose
+    const adjoint! = Base.ctranspose!
+    export adjoint, adjoint!
+else
+    import Base: adjoint, adjoint!
+end
+
+
 include("stridedview.jl")
 include("sview.jl")
 include("map.jl")
