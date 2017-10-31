@@ -165,8 +165,8 @@ end
     pre2 = Expr(:block, [:($(Ivars[j]) = offsets[$j]+1) for j = 1:M]...)
 
     ex = :(As[1][ParentIndex($(Ivars[1]))] = f($([:(As[$j][ParentIndex($(Ivars[j]))]) for j = 2:M]...)))
+    i = 1
     if N >= 1
-        i = 1
         ex = quote
             @simd for $(innerloopvars[i]) = Base.OneTo($(blockdimvars[i]))
                 $ex
@@ -184,14 +184,14 @@ end
             $(Expr(:block, [:($(Ivars[j]) -=  $(blockdimvars[i]) * $(stridevars[i,j])) for j = 1:M]...))
         end
     end
-    for i = 1:N
+    for i2 = 1:N
         ex = quote
-            for $(blockloopvars[i]) = 1:blocks[$i]:dims[$i]
-                $(blockdimvars[i]) = min(blocks[$i], dims[$i]-$(blockloopvars[i])+1)
+            for $(blockloopvars[i2]) = 1:blocks[$i2]:dims[$i2]
+                $(blockdimvars[i2]) = min(blocks[$i2], dims[$i2]-$(blockloopvars[i2])+1)
                 $ex
-                $(Expr(:block, [:($(Ivars[j]) +=  $(blockdimvars[i]) * $(stridevars[i,j])) for j = 1:M]...))
+                $(Expr(:block, [:($(Ivars[j]) +=  $(blockdimvars[i2]) * $(stridevars[i2,j])) for j = 1:M]...))
             end
-            $(Expr(:block, [:($(Ivars[j]) -=  dims[$i] * $(stridevars[i,j])) for j = 1:M]...))
+            $(Expr(:block, [:($(Ivars[j]) -=  dims[$i2] * $(stridevars[i2,j])) for j = 1:M]...))
         end
     end
     quote

@@ -24,7 +24,7 @@ offset(a::Base.ReshapedArray) = 0
 # end
 
 # Methods for StridedView
-Base.parent(a::StridedView) = a.size
+Base.parent(a::StridedView) = a.parent
 Base.size(a::StridedView) = a.size
 Base.strides(a::StridedView) = a.strides
 Base.stride(a::StridedView, n::Integer) = a.strides[n]
@@ -83,10 +83,10 @@ function adjoint(a::StridedView{<:Any,2}) # act recursively, like base
     end
 end
 
-const SizeType = Union{Int, Tuple{Vararg{Int}}}
-
 splitdims(a::StridedArray, args...) = splitdims(StridedView(a), args...)
 fusedims(a::StridedArray, args...) = fusedims(StridedView(a), args...)
+
+const SizeType = Union{Int, Tuple{Vararg{Int}}}
 
 function splitdims(a::StridedView{<:Any,N}, newsizes::Vararg{SizeType,N}) where {N}
     map(prod, newsizes) == size(a) || throw(DimensionMismatch())
@@ -94,18 +94,18 @@ function splitdims(a::StridedView{<:Any,N}, newsizes::Vararg{SizeType,N}) where 
     newsize = TupleTools.vcat(newsizes...)
     return StridedView(a.parent, newsize, newstrides, a.offset, a.op)
 end
-function splitdims(a::StridedView, s::Pair{Int,SizeType})
+function splitdims(a::StridedView, s::Pair{Int,<:SizeType})
     i = s[1]
     isize = s[2]
     prod(isize) == size(a, i) || throw(DimensionMismatch())
-    istrides = _computestrides(stride(a, i), isize)
+    istrides = _computenewstride(stride(a, i), isize)
     newsize = TupleTools.insertat(size(a), i, isize)
     newstrides = TupleTools.insertat(strides(a), i, istrides)
     return StridedView(a.parent, newsize, newstrides, a.offset, a.op)
 end
 
-function splitdims(a::StridedView, s1::Pair{Int,SizeType}, s2::Pair{Int,SizeType}, S::Vararg{Pair{Int,SizeType}})
-    p = TupleTools._sortperm((s1, s2, S...), first, true)
+function splitdims(a::StridedView, s1::Pair{Int,<:SizeType}, s2::Pair{Int,<:SizeType}, S::Vararg{Pair{Int,<:SizeType}})
+    p = TupleTools._sortperm((s1, s2, S...), isless, first, true)
     args = TupleTools.permute((s1, s2, S...), p)
     splitdims(splitdims(a, args[1]), tail(args)...)
 end
@@ -119,6 +119,8 @@ function fusedims(a::StridedView, i1::Int, i2::Int)
         error("Can only fuse dimensions with matching strides")
     end
 end
+
+
 
 # Methods based on map!
 Base.copy!(dst::StridedView{<:Any,N}, src::StridedView{<:Any,N}) where {N} = map!(identity, dst, src)
