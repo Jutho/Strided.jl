@@ -27,6 +27,20 @@ else
     import Base: adjoint, adjoint!
 end
 
+import Base.LinAlg.axpy!
+@static if !isdefined(Base.LinAlg, :axpby!)
+    """
+        axpby!(a, X, b, Y)
+
+    Overwrite Y with X*a + Y*b, where a and b are scalars. Return Y.
+    """
+    function axpby! end
+else
+    import Base.LinAlg.axpby!
+end
+
+export axpby!, axpy!
+
 
 include("stridedview.jl")
 include("sview.jl")

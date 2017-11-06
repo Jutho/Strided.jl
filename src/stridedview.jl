@@ -120,15 +120,14 @@ function fusedims(a::StridedView, i1::Int, i2::Int)
     end
 end
 
-
-
 # Methods based on map!
 Base.copy!(dst::StridedView{<:Any,N}, src::StridedView{<:Any,N}) where {N} = map!(identity, dst, src)
-Base.scale!(dst::StridedView{<:Any,N}, α, src::StridedView{<:Any,N}) where {N} = map!(x->α*x, dst, src)
-Base.scale!(dst::StridedView{<:Any,N}, src::StridedView{<:Any,N}, α) where {N} = map!(x->x*α, dst, src)
-Base.LinAlg.axpy!(a::Number, X::StridedView{<:Any,N}, Y::StridedView{<:Any,N}) where {N} = map!((x,y)->(a*x+y), Y, X, Y)
 Base.conj!(a::StridedView) = map!(conj, a, a)
 Base.permutedims!(dst::StridedView{<:Any,N}, src::StridedView{<:Any,N}, p) where {N} = copy!(dst, permutedims(src, p))
+Base.scale!(dst::StridedView{<:Number,N}, α::Number, src::StridedView{<:Number,N}) where {N} = map!(x->α*x, dst, src)
+Base.scale!(dst::StridedView{<:Number,N}, src::StridedView{<:Number,N}, α::Number) where {N} = map!(x->x*α, dst, src)
+axpy!(a::Number, X::StridedView{<:Number,N}, Y::StridedView{<:Number,N}) where {N} = a == 1 ? map!(+, Y, X, Y) : map!((x,y)->(a*x+y), Y, X, Y)
+axpby!(a::Number, X::StridedView{<:Number,N}, b::Number, Y::StridedView{<:Number,N}) where {N} = map!((x,y)->(a*x+b*y), Y, X, Y)
 
 # Converting back to other DenseArray type:
 Base.convert(T::Type{<:StridedView}, a::StridedView) = a
