@@ -11,8 +11,11 @@ function mapr!(f::F, b::StridedView{<:Any,N}, a1::StridedView{<:Any,N}, A::Varar
 
     # Sort loops based on minimal memory jumps
     As = (b, a1, A...)
-    allstrides = map(strides, As)
-    minstrides = map(min, allstrides...)
+    bstrides = strides(b)
+    a1strides = strides(a1)
+    Astrides = map(strides, A)
+    allstrides = (bstrides, a1strides, Astrides...)
+    minstrides = map(min, map(min, bstrides, a1strides), Astrides...)
     p = TupleTools._sortperm((dims .- 1) .* minstrides)
     dims = TupleTools.getindices(dims, p)
     minstrides = TupleTools.getindices(minstrides, p)
@@ -60,8 +63,11 @@ function mapi!(f::F, b::StridedView{<:Any,N}, a1::StridedView{<:Any,N}, A::Varar
 
     # Sort loops based on minimal memory jumps
     As = (b, a1, A...)
-    allstrides = map(strides, As)
-    minstrides = map(min, allstrides...)
+    bstrides = strides(b)
+    a1strides = strides(a1)
+    Astrides = map(strides, A)
+    allstrides = (bstrides, a1strides, Astrides...)
+    minstrides = map(min, map(min, bstrides, a1strides), Astrides...)
     p = TupleTools._sortperm((dims .- 1) .* minstrides)
     dims = TupleTools.getindices(dims, p)
     minstrides = TupleTools.getindices(minstrides, p)
