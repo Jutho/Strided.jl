@@ -131,9 +131,16 @@ axpby!(a::Number, X::StridedView{<:Number,N}, b::Number, Y::StridedView{<:Number
 
 # Converting back to other DenseArray type:
 Base.convert(T::Type{<:StridedView}, a::StridedView) = a
-Base.convert(T::Type{<:DenseArray}, a::StridedView) = copy!(StridedView(T(size(a))), a)
-Base.convert(::Type{Array}, a::StridedView{T}) where {T} = copy!(StridedView(Array{T}(size(a))), a)
-
+function Base.convert(T::Type{<:DenseArray}, a::StridedView)
+    b = T(size(a))
+    copy!(StridedView(b), a)
+    return b
+end
+function Base.convert(::Type{Array}, a::StridedView{T}) where {T}
+    b = Array{T}(size(a))
+    copy!(StridedView(b), a)
+    return b
+end
 Base.unsafe_convert(::Type{Ptr{T}}, a::StridedView{T}) where {T} = pointer(a.parent, a.offset+1)
 
 const StridedMatVecView{T} = Union{StridedView{T,1},StridedView{T,2}}
