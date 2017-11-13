@@ -1,6 +1,5 @@
 module Strided
 
-# ParentIndex: index directly in parent array of StridedView
 import Base: parent, size, strides, tail, setindex
 using Base: @propagate_inbounds, RangeIndex
 
