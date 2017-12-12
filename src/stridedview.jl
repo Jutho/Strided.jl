@@ -132,12 +132,12 @@ axpby!(a::Number, X::StridedView{<:Number,N}, b::Number, Y::StridedView{<:Number
 # Converting back to other DenseArray type:
 Base.convert(T::Type{<:StridedView}, a::StridedView) = a
 function Base.convert(T::Type{<:DenseArray}, a::StridedView)
-    b = T(size(a))
+    b = T(uninitialized, size(a))
     copy!(StridedView(b), a)
     return b
 end
 function Base.convert(::Type{Array}, a::StridedView{T}) where {T}
-    b = Array{T}(size(a))
+    b = Array{T}(uninitialized, size(a))
     copy!(StridedView(b), a)
     return b
 end
@@ -145,7 +145,16 @@ Base.unsafe_convert(::Type{Ptr{T}}, a::StridedView{T}) where {T} = pointer(a.par
 
 const StridedMatVecView{T} = Union{StridedView{T,1},StridedView{T,2}}
 
-function Base.A_mul_B!(C::StridedMatVecView{T}, A::StridedMatVecView{T}, B::StridedMatVecView{T}) where {T<:Base.LinAlg.BlasFloat}
+@static if isdefined(Base.LinAlg, :mul!)
+    import Base.LinAlg.mul!
+else
+    const mul! = Base.A_mul_B!
+    Base.Ac_mul_B!(C::StridedView, A::StridedView, B::StridedView) = Base.A_mul_B!(C, A', B)
+    Base.A_mul_Bc!(C::StridedView, A::StridedView, B::StridedView) = Base.A_mul_B!(C, A, B')
+    Base.Ac_mul_Bc!(C::StridedView, A::StridedView, B::StridedView) = Base.A_mul_B!(C, A', B')
+end
+
+function mul!(C::StridedMatVecView{T}, A::StridedMatVecView{T}, B::StridedMatVecView{T}) where {T<:Base.LinAlg.BlasFloat}
     if !(any(equalto(1), strides(A)) && any(equalto(1), strides(B)) && any(equalto(1), strides(C)))
         Base.LinAlg.generic_matmatmul!(C,'N','N',A,B)
         return C
@@ -153,13 +162,13 @@ function Base.A_mul_B!(C::StridedMatVecView{T}, A::StridedMatVecView{T}, B::Stri
 
     if C.op == conj
         if stride(C,1) == 1
-            A_mul_B!(conj(C), conj(A), conj(B))
+            mul!(conj(C), conj(A), conj(B))
         else
-            A_mul_B!(C', B', A')
+            mul!(C', B', A')
         end
         return C
     elseif stride(C,1) != 1
-        A_mul_B!(transpose(C), transpose(B), transpose(A))
+        mul!(transpose(C), transpose(B), transpose(A))
         return C
     end
     # if we reach here, we know that C is in standard form
@@ -197,10 +206,6 @@ function Base.A_mul_B!(C::StridedMatVecView{T}, A::StridedMatVecView{T}, B::Stri
     end
     Base.LinAlg.gemm_wrapper!(C,cA,cB,A2,B2)
 end
-
-Base.Ac_mul_B!(C::StridedView, A::StridedView, B::StridedView) = Base.A_mul_B!(C, A', B)
-Base.A_mul_Bc!(C::StridedView, A::StridedView, B::StridedView) = Base.A_mul_B!(C, A, B')
-Base.Ac_mul_Bc!(C::StridedView, A::StridedView, B::StridedView) = Base.A_mul_B!(C, A', B')
 
 # Auxiliary routines
 @inline _computeind(indices::Tuple{}, strides::Tuple{}) = 1

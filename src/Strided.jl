@@ -8,15 +8,7 @@ using TupleTools: StaticLength
 
 export StridedView, StridedIterator, BlockedIterator, splitdims, sview
 
-@static if !isdefined(Base, :EqualTo)
-    struct EqualTo{T} <: Function
-        x::T
-        EqualTo(x::T) where {T} = new{T}(x)
-    end
-    (f::EqualTo)(y) = isequal(f.x, y)
-    const equalto = EqualTo
-    export equalto
-end
+using Compat
 
 @static if !isdefined(Base, :adjoint)
     const adjoint = Base.ctranspose
