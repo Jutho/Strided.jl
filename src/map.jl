@@ -8,6 +8,7 @@ function mapr!(f::F, b::StridedView{<:Any,N}, a1::StridedView{<:Any,N}, A::Varar
     for a in A
         size(a) == dims || throw(DimensionMismatch)
     end
+    prod(dims) == 0 && return b
 
     # Sort loops based on minimal memory jumps
     As = (b, a1, A...)
@@ -60,6 +61,7 @@ function mapi!(f::F, b::StridedView{<:Any,N}, a1::StridedView{<:Any,N}, A::Varar
     for a in A
         size(a) == dims || throw(DimensionMismatch)
     end
+    prod(dims) == 0 && return b
 
     # Sort loops based on minimal memory jumps
     As = (b, a1, A...)
@@ -211,7 +213,9 @@ end
 _computeblocks(dims::Tuple{}, minstrides::Tuple{}, allstrides::Tuple{Vararg{Tuple{}}}, blocksize::Int = BLOCKSIZE) = ()
 function _computeblocks(dims::NTuple{N,Int}, minstrides::NTuple{N,Int}, allstrides::Tuple{Vararg{NTuple{N,Int}}}, blocksize::Int = BLOCKSIZE) where {N}
     # strides1 is assumed to be sorted
-    if all(equalto(1), map(indmin, allstrides))
+    if prod(dims) <= BLOCKSIZE
+        return dims
+    elseif all(equalto(1), map(indmin, allstrides))
         return (dims[1], _computeblocks(tail(dims), tail(minstrides), map(tail, allstrides), div(blocksize, dims[1]))...)
     elseif blocksize == 0
         return ntuple(n->1, StaticLength(N))
