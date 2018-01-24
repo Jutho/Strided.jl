@@ -29,6 +29,7 @@ Base.size(a::StridedView) = a.size
 Base.strides(a::StridedView) = a.strides
 Base.stride(a::StridedView, n::Integer) = a.strides[n]
 offset(a::StridedView) = a.offset
+Base.first_index(a::StridedView) = a.offset + 1
 
 Base.IndexStyle(::Type{<:StridedView}) = Base.IndexCartesian()
 
@@ -49,8 +50,8 @@ struct ParentIndex
     i::Int
 end
 
-@propagate_inbounds Base.getindex(a::StridedView, I::ParentIndex) = a.op(getindex(a.parent, I.i))
-@propagate_inbounds Base.setindex!(a::StridedView, v, I::ParentIndex) = (setindex!(a.parent, a.op(v), I.i); return a)
+@propagate_inbounds @inline Base.getindex(a::StridedView, I::ParentIndex) = a.op(getindex(a.parent, I.i))
+@propagate_inbounds @inline Base.setindex!(a::StridedView, v, I::ParentIndex) = (setindex!(a.parent, a.op(v), I.i); return a)
 
 Base.similar(a::StridedView, ::Type{T}, dims::NTuple{N,Int}) where {N,T}  = StridedView(similar(a.parent, T, dims))
 Base.copy(a::StridedView) = copy!(similar(a), a)
@@ -63,9 +64,9 @@ Base.conj(a::StridedView{T,N,A,FT}) where {T,N,A} = StridedView{T,N,A,FA}(a.pare
 Base.conj(a::StridedView{T,N,A,FA}) where {T,N,A} = StridedView{T,N,A,FT}(a.parent, a.size, a.strides, a.offset, transpose)
 
 function Base.permutedims(a::StridedView{<:Any,N}, p) where {N}
-    (length(p) == N && isperm(p)) || throw(ArgumentError("Invalid permutation of length $N: $p"))
-    newsize = TupleTools.permute(a.size, p)
-    newstrides = TupleTools.permute(a.strides, p)
+    (length(p) == N && TupleTools.isperm(p)) || throw(ArgumentError("Invalid permutation of length $N: $p"))
+    newsize = TupleTools._permute(a.size, p)
+    newstrides = TupleTools._permute(a.strides, p)
     return StridedView(a.parent, newsize, newstrides, a.offset, a.op)
 end
 
@@ -106,7 +107,7 @@ end
 
 function splitdims(a::StridedView, s1::Pair{Int,<:SizeType}, s2::Pair{Int,<:SizeType}, S::Vararg{Pair{Int,<:SizeType}})
     p = TupleTools._sortperm((s1, s2, S...), isless, first, true)
-    args = TupleTools.permute((s1, s2, S...), p)
+    args = TupleTools._permute((s1, s2, S...), p)
     splitdims(splitdims(a, args[1]), tail(args)...)
 end
 
@@ -124,8 +125,8 @@ end
 Base.copy!(dst::StridedView{<:Any,N}, src::StridedView{<:Any,N}) where {N} = map!(identity, dst, src)
 Base.conj!(a::StridedView) = map!(conj, a, a)
 Base.permutedims!(dst::StridedView{<:Any,N}, src::StridedView{<:Any,N}, p) where {N} = copy!(dst, permutedims(src, p))
-Base.scale!(dst::StridedView{<:Number,N}, α::Number, src::StridedView{<:Number,N}) where {N} = map!(x->α*x, dst, src)
-Base.scale!(dst::StridedView{<:Number,N}, src::StridedView{<:Number,N}, α::Number) where {N} = map!(x->x*α, dst, src)
+Base.scale!(dst::StridedView{<:Number,N}, α::Number, src::StridedView{<:Number,N}) where {N} = α == 1 ? copy!(dst, src) : map!(x->α*x, dst, src)
+Base.scale!(dst::StridedView{<:Number,N}, src::StridedView{<:Number,N}, α::Number) where {N} = α == 1 ? copy!(dst, src) : map!(x->x*α, dst, src)
 axpy!(a::Number, X::StridedView{<:Number,N}, Y::StridedView{<:Number,N}) where {N} = a == 1 ? map!(+, Y, X, Y) : map!((x,y)->(a*x+y), Y, X, Y)
 axpby!(a::Number, X::StridedView{<:Number,N}, b::Number, Y::StridedView{<:Number,N}) where {N} = map!((x,y)->(a*x+b*y), Y, X, Y)
 

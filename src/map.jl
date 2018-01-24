@@ -1,15 +1,26 @@
-@inline Base.map!(f::F, b::StridedView{<:Any,N}, a1::StridedView{<:Any,N}, A::Vararg{StridedView{<:Any,N}}) where {F,N} = mapi!(f, b, a1, A...)
-Base.broadcast!(f, b::StridedView{<:Any,N}, a1::StridedView{<:Any,N}, A::Vararg{StridedView{<:Any,N}}) where {N} = map!(f, b, a1, A...)
-
-function mapr!(f::F, b::StridedView{<:Any,N}, a1::StridedView{<:Any,N}, A::Vararg{StridedView{<:Any,N}}) where {F,N}
+function Base.map!(f::F, b::StridedView{<:Any,N}, a1::StridedView{<:Any,N}, A::Vararg{StridedView{<:Any,N}}) where {F,N}
     dims = size(b)
     # Check dimesions
     size(a1) == dims || throw(DimensionMismatch)
     for a in A
         size(a) == dims || throw(DimensionMismatch)
     end
-    prod(dims) == 0 && return b
+    l = prod(dims)
+    if l == 0
+        # don't do anything
+    elseif l <= BLOCKSIZE
+        As = (b, a1, A...)
+        Astrides = map(strides, As)
+        offsets = map(offset, As)
+        map_rkernel!(f, dims, As, Astrides, offsets)
+    else
+        mapi!(f, dims, b, a1, A...)
+    end
+    return b
+end
+Base.broadcast!(f, b::StridedView{<:Any,N}, a1::StridedView{<:Any,N}, A::Vararg{StridedView{<:Any,N}}) where {N} = map!(f, b, a1, A...)
 
+function mapr!(f::F, dims::NTuple{N,Int}, b::StridedView{<:Any,N}, a1::StridedView{<:Any,N}, A::Vararg{StridedView{<:Any,N}}) where {F,N}
     # Sort loops based on minimal memory jumps
     As = (b, a1, A...)
     bstrides = strides(b)
@@ -54,15 +65,7 @@ end
     end
 end
 
-function mapi!(f::F, b::StridedView{<:Any,N}, a1::StridedView{<:Any,N}, A::Vararg{StridedView{<:Any,N}}) where {F,N}
-    dims = size(b)
-    # Check dimesions
-    size(a1) == dims || throw(DimensionMismatch)
-    for a in A
-        size(a) == dims || throw(DimensionMismatch)
-    end
-    prod(dims) == 0 && return b
-
+function mapi!(f::F, dims::NTuple{N,Int}, b::StridedView{<:Any,N}, a1::StridedView{<:Any,N}, A::Vararg{StridedView{<:Any,N}}) where {F,N}
     # Sort loops based on minimal memory jumps
     As = (b, a1, A...)
     bstrides = strides(b)
@@ -70,7 +73,7 @@ function mapi!(f::F, b::StridedView{<:Any,N}, a1::StridedView{<:Any,N}, A::Varar
     Astrides = map(strides, A)
     allstrides = (bstrides, a1strides, Astrides...)
     minstrides = map(min, map(min, bstrides, a1strides), Astrides...)
-    p = TupleTools._sortperm((dims .- 1) .* minstrides)
+    p = TupleTools._sortperm(map((x,y)->(x-1)*y,dims,minstrides))
     dims = TupleTools.getindices(dims, p)
     minstrides = TupleTools.getindices(minstrides, p)
     allstrides = let q = p
@@ -78,7 +81,7 @@ function mapi!(f::F, b::StridedView{<:Any,N}, a1::StridedView{<:Any,N}, A::Varar
     end
 
     # Fuse dimensions if possible
-    for i = N:-1:2
+    @inbounds for i = N:-1:2
         merge = true
         for s in allstrides
             if s[i] != dims[i-1]*s[i-1]
@@ -156,6 +159,7 @@ end
         end
     end
     quote
+        Base.@_inline_meta
         $pre1
         $pre2
         @inbounds $ex
@@ -169,10 +173,12 @@ end
 
     stridevars = [Symbol("stride_$(i)_$(j)") for i = 1:N, j = 1:M]
     Ivars = [Symbol("I$j") for j = 1:M]
-    pre1 = Expr(:block, [:($(stridevars[i,j]) = strides[$j][$i]) for i = 1:N, j=1:M]...)
-    pre2 = Expr(:block, [:($(Ivars[j]) = offsets[$j]+1) for j = 1:M]...)
+    Avars = [Symbol("A$j") for j = 1:M]
+    pre1 = Expr(:block, [:($(Avars[j]) = As[$j]) for j = 1:M]...)
+    pre2 = Expr(:block, [:($(stridevars[i,j]) = strides[$j][$i]) for i = 1:N, j=1:M]...)
+    pre3 = Expr(:block, [:($(Ivars[j]) = offsets[$j]+1) for j = 1:M]...)
 
-    ex = :(As[1][ParentIndex($(Ivars[1]))] = f($([:(As[$j][ParentIndex($(Ivars[j]))]) for j = 2:M]...)))
+    ex = :(A1[ParentIndex($(Ivars[1]))] = f($([:($(Avars[j])[ParentIndex($(Ivars[j]))]) for j = 2:M]...)))
     i = 1
     if N >= 1
         ex = quote
@@ -205,8 +211,9 @@ end
     quote
         $pre1
         $pre2
+        $pre3
         @inbounds $ex
-        return As[1]
+        return A1
     end
 end
 
