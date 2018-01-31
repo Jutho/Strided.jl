@@ -10,28 +10,31 @@ export StridedView, StridedIterator, BlockedIterator, splitdims, sview
 
 using Compat
 
-@static if !isdefined(Base, :adjoint)
+@static if VERSION < v"0.7-"
     const adjoint = Base.ctranspose
     const adjoint! = Base.ctranspose!
-    export adjoint, adjoint!
+
+    import Base.LinAlg: scale!, axpy!
+    @static if !isdefined(Base.LinAlg, :axpby!)
+        """
+            axpby!(a, X, b, Y)
+
+        Overwrite Y with X*a + Y*b, where a and b are scalars. Return Y.
+        """
+        function axpby! end
+    else
+        import Base.LinAlg.axpby!
+    end
+
+    const LinearAlgebra = Base.LinAlg
 else
-    import Base: adjoint, adjoint!
+    using LinearAlgebra
+    import LinearAlgebra: adjoint, adjoint!, scale!, axpy!, axpby!, mul!
 end
 
-import Base.LinAlg.axpy!
-@static if !isdefined(Base.LinAlg, :axpby!)
-    """
-        axpby!(a, X, b, Y)
-
-    Overwrite Y with X*a + Y*b, where a and b are scalars. Return Y.
-    """
-    function axpby! end
-else
-    import Base.LinAlg.axpby!
+@static if VERSION < v"0.7.0-DEV.3155"
+    const popfirst! = shift!
 end
-
-export axpby!, axpy!
-
 
 include("stridedview.jl")
 include("sview.jl")

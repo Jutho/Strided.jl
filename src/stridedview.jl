@@ -27,7 +27,7 @@ offset(a::Base.ReshapedArray) = 0
 Base.parent(a::StridedView) = a.parent
 Base.size(a::StridedView) = a.size
 Base.strides(a::StridedView) = a.strides
-Base.stride(a::StridedView, n::Integer) = a.strides[n]
+Base.stride(a::StridedView, n::Int) = a.strides[n]
 offset(a::StridedView) = a.offset
 Base.first_index(a::StridedView) = a.offset + 1
 
@@ -125,8 +125,8 @@ end
 Base.copy!(dst::StridedView{<:Any,N}, src::StridedView{<:Any,N}) where {N} = map!(identity, dst, src)
 Base.conj!(a::StridedView) = map!(conj, a, a)
 Base.permutedims!(dst::StridedView{<:Any,N}, src::StridedView{<:Any,N}, p) where {N} = copy!(dst, permutedims(src, p))
-Base.scale!(dst::StridedView{<:Number,N}, α::Number, src::StridedView{<:Number,N}) where {N} = α == 1 ? copy!(dst, src) : map!(x->α*x, dst, src)
-Base.scale!(dst::StridedView{<:Number,N}, src::StridedView{<:Number,N}, α::Number) where {N} = α == 1 ? copy!(dst, src) : map!(x->x*α, dst, src)
+scale!(dst::StridedView{<:Number,N}, α::Number, src::StridedView{<:Number,N}) where {N} = α == 1 ? copy!(dst, src) : map!(x->α*x, dst, src)
+scale!(dst::StridedView{<:Number,N}, src::StridedView{<:Number,N}, α::Number) where {N} = α == 1 ? copy!(dst, src) : map!(x->x*α, dst, src)
 axpy!(a::Number, X::StridedView{<:Number,N}, Y::StridedView{<:Number,N}) where {N} = a == 1 ? map!(+, Y, X, Y) : map!((x,y)->(a*x+y), Y, X, Y)
 axpby!(a::Number, X::StridedView{<:Number,N}, b::Number, Y::StridedView{<:Number,N}) where {N} = map!((x,y)->(a*x+b*y), Y, X, Y)
 
@@ -146,8 +146,8 @@ Base.unsafe_convert(::Type{Ptr{T}}, a::StridedView{T}) where {T} = pointer(a.par
 
 const StridedMatVecView{T} = Union{StridedView{T,1},StridedView{T,2}}
 
-@static if isdefined(Base.LinAlg, :mul!)
-    import Base.LinAlg.mul!
+@static if isdefined(LinearAlgebra, :mul!)
+    import LinearAlgebra: mul!
 else
     const mul! = Base.A_mul_B!
     Base.Ac_mul_B!(C::StridedView, A::StridedView, B::StridedView) = Base.A_mul_B!(C, A', B)
@@ -155,9 +155,9 @@ else
     Base.Ac_mul_Bc!(C::StridedView, A::StridedView, B::StridedView) = Base.A_mul_B!(C, A', B')
 end
 
-function mul!(C::StridedMatVecView{T}, A::StridedMatVecView{T}, B::StridedMatVecView{T}) where {T<:Base.LinAlg.BlasFloat}
+function mul!(C::StridedMatVecView{T}, A::StridedMatVecView{T}, B::StridedMatVecView{T}) where {T<:LinearAlgebra.BlasFloat}
     if !(any(equalto(1), strides(A)) && any(equalto(1), strides(B)) && any(equalto(1), strides(C)))
-        Base.LinAlg.generic_matmatmul!(C,'N','N',A,B)
+        LinearAlgebra.generic_matmatmul!(C,'N','N',A,B)
         return C
     end
 
@@ -186,7 +186,7 @@ function mul!(C::StridedMatVecView{T}, A::StridedMatVecView{T}, B::StridedMatVec
             A2 = A'
             cA = 'C'
         else
-            return Base.LinAlg.generic_matmatmul!(C,'N','N',A,B)
+            return LinearAlgebra.generic_matmatmul!(C,'N','N',A,B)
         end
     end
     if B.op == identity
@@ -202,10 +202,10 @@ function mul!(C::StridedMatVecView{T}, A::StridedMatVecView{T}, B::StridedMatVec
             B2 = B'
             cB = 'C'
         else
-            return Base.LinAlg.generic_matmatmul!(C,'N','N',A,B)
+            return LinearAlgebra.generic_matmatmul!(C,'N','N',A,B)
         end
     end
-    Base.LinAlg.gemm_wrapper!(C,cA,cB,A2,B2)
+    LinearAlgebra.gemm_wrapper!(C,cA,cB,A2,B2)
 end
 
 # Auxiliary routines

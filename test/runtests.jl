@@ -1,11 +1,15 @@
 if VERSION < v"0.7.0-DEV.2005"
     const Test = Base.Test
 end
+if VERSION >= v"0.7.0-DEV.3406"
+    using Random
+end
 
 using Test
 using Strided
+const adjoint = Strided.adjoint
 
-for T in (Float32, Float64, Complex64, Complex128)
+for T in (Float32, Float64, Complex{Float32}, Complex{Float64})
     d = 20
     A1 = rand(T, (d,d))
     A2 = rand(T, (d,d))
@@ -19,7 +23,7 @@ for T in (Float32, Float64, Complex64, Complex128)
         for op2 in (identity, conj, transpose, adjoint)
             @test op1(A1)*op2(A2) ≈ op1(B1)*op2(B2)
             for op3 in (identity, conj, transpose, adjoint)
-                Base.A_mul_B!(op3(B3), op1(B1), op2(B2))
+                Strided.mul!(op3(B3), op1(B1), op2(B2))
                 @test B3 ≈ op3(op1(A1)*op2(A2)) # op3 is its own inverse
             end
         end
@@ -40,7 +44,7 @@ let T = Complex{Int}
         for op2 in (identity, conj, transpose, adjoint)
             @test op1(A1)*op2(A2) ≈ op1(B1)*op2(B2)
             for op3 in (identity, conj, transpose, adjoint)
-                Base.A_mul_B!(op3(B3), op1(B1), op2(B2))
+                Strided.mul!(op3(B3), op1(B1), op2(B2))
                 @test B3 ≈ op3(op1(A1)*op2(A2)) # op3 is its own inverse
             end
         end
@@ -61,7 +65,7 @@ let T = Rational{Int}
         for op2 in (identity, conj, transpose, adjoint)
             @test op1(A1)*op2(A2) ≈ op1(B1)*op2(B2)
             for op3 in (identity, conj, transpose, adjoint)
-                Base.A_mul_B!(op3(B3), op1(B1), op2(B2))
+                Strided.mul!(op3(B3), op1(B1), op2(B2))
                 @test B3 ≈ op3(op1(A1)*op2(A2)) # op3 is its own inverse
             end
         end
@@ -69,7 +73,7 @@ let T = Rational{Int}
 end
 
 
-for T in (Float32, Float64, Complex64, Complex128)
+for T in (Float32, Float64, Complex{Float32}, Complex{Float64})
     for N = 2:6
         dims = ntuple(n->rand(1:10), N)
         A = rand(T, dims)
