@@ -152,7 +152,7 @@ end
 const BLOCKSIZE = 1024
 function map_recursive!(f::F, dims::NTuple{N,Int}, minstrides::NTuple{N,Int}, arrs::NTuple{M,StridedView{<:Any,N}}, arrstrides::NTuple{M,NTuple{N,Int}}, offsets::NTuple{M,Int}) where {F,N,M}
     l = TupleTools.prod(dims)
-    if l <= BLOCKSIZE || (dims[1] == l && all(equalto(1), map(TupleTools.argmin, arrstrides)))
+    if l <= BLOCKSIZE || (dims[1] == l && all(equalto(1), map(first, arrstrides)))
         map_rkernel!(f, dims, arrs, arrstrides, offsets)
     else
         i = TupleTools.argmax( (dims .- 1) .* minstrides )
@@ -257,7 +257,7 @@ end
 _computeblocks(dims::Tuple{}, minstrides::Tuple{}, allstrides::Tuple{Vararg{Tuple{}}}, blocksize::Int = BLOCKSIZE) = ()
 function _computeblocks(dims::NTuple{N,Int}, minstrides::NTuple{N,Int}, allstrides::Tuple{Vararg{NTuple{N,Int}}}, blocksize::Int = BLOCKSIZE) where {N}
     # strides1 is assumed to be sorted
-    if prod(dims) <= BLOCKSIZE
+    if prod(dims) <= blocksize
         return dims
     elseif all(equalto(1), map(TupleTools.argmin, allstrides))
         return (dims[1], _computeblocks(tail(dims), tail(minstrides), map(tail, allstrides), div(blocksize, dims[1]))...)
@@ -286,7 +286,7 @@ function _computethreadblocks(n::Int, dims::NTuple{N,Int}, minstrides::NTuple{N,
         for j = 1:l
             dims = popfirst!(threadblocks)
             offsets = popfirst!(threadoffsets)
-            i = TupleTools.argmax((dims.-1).*minstrides)
+            i = TupleTools.argmax((dims.-k).*minstrides) # make sure that ndi is at least 1 by subtracting k from dims
             ndi = div(dims[i], k)
             newdims = setindex(dims, ndi, i)
             stridesi = let j = i

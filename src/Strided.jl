@@ -15,21 +15,17 @@ using Compat
     const adjoint! = Base.ctranspose!
 
     import Base.LinAlg: scale!, axpy!
-    @static if !isdefined(Base.LinAlg, :axpby!)
-        """
-            axpby!(a, X, b, Y)
+    """
+        axpby!(a, X, b, Y)
 
-        Overwrite Y with X*a + Y*b, where a and b are scalars. Return Y.
-        """
-        function axpby! end
-    else
-        import Base.LinAlg.axpby!
-    end
+    Overwrite Y with X*a + Y*b, where a and b are scalars. Return Y.
+    """
+    function axpby! end
 
     const LinearAlgebra = Base.LinAlg
 else
     using LinearAlgebra
-    import LinearAlgebra: adjoint, adjoint!, scale!, axpy!, axpby!, mul!
+    import LinearAlgebra: adjoint, adjoint!, axpy!, axpby!, mul!
 end
 
 @static if VERSION < v"0.7.0-DEV.3155"
