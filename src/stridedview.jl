@@ -84,46 +84,19 @@ function adjoint(a::StridedView{<:Any,2}) # act recursively, like base
     end
 end
 
-splitdims(a::StridedArray, args...) = splitdims(StridedView(a), args...)
-fusedims(a::StridedArray, args...) = fusedims(StridedView(a), args...)
-
-const SizeType = Union{Int, Tuple{Vararg{Int}}}
-
-function splitdims(a::StridedView{<:Any,N}, newsizes::Vararg{SizeType,N}) where {N}
-    map(prod, newsizes) == size(a) || throw(DimensionMismatch())
-    newstrides = _computenewstrides(strides(a), newsizes)
-    newsize = TupleTools.vcat(newsizes...)
-    return StridedView(a.parent, newsize, newstrides, a.offset, a.op)
-end
-function splitdims(a::StridedView, s::Pair{Int,<:SizeType})
-    i = s[1]
-    isize = s[2]
-    prod(isize) == size(a, i) || throw(DimensionMismatch())
-    istrides = _computenewstride(stride(a, i), isize)
-    newsize = TupleTools.insertat(size(a), i, isize)
-    newstrides = TupleTools.insertat(strides(a), i, istrides)
-    return StridedView(a.parent, newsize, newstrides, a.offset, a.op)
+function Base.reshape(a::StridedView, newsize::Dims)
+    newstrides = _computereshapestrides(newsize, size(a), strides(a))
+    StridedView(a.parent, newsize, newstrides, a.offset, a.op)
 end
 
-function splitdims(a::StridedView, s1::Pair{Int,<:SizeType}, s2::Pair{Int,<:SizeType}, S::Vararg{Pair{Int,<:SizeType}})
-    p = TupleTools._sortperm((s1, s2, S...), isless, first, true)
-    args = TupleTools._permute((s1, s2, S...), p)
-    splitdims(splitdims(a, args[1]), tail(args)...)
+struct ReshapeException <: Exception
 end
-
-function fusedims(a::StridedView, i1::Int, i2::Int)
-    if stride(a, i1)*size(a, i1) == stride(a, i2)
-        newsize = TupleTools.deleteat(TupleTools.setindex(size(a), size(a,i1)*size(a,i2), i1), i2)
-        newstrides = TupleTools.deleteat(strides(a), i2)
-        StridedView(a.parent, newsize, newstrides, a.offset, a.op)
-    else
-        error("Can only fuse dimensions with matching strides")
-    end
-end
+Base.show(io::IO, e::ReshapeException) = print(io, "Cannot produce a reshaped StridedView without allocating, try reshape(copy(array), newsize)")
 
 # Methods based on map!
 Base.copy!(dst::StridedView{<:Any,N}, src::StridedView{<:Any,N}) where {N} = map!(identity, dst, src)
 Base.conj!(a::StridedView) = map!(conj, a, a)
+adjoint!(dst::StridedView{<:Any,N}, src::StridedView{<:Any,N}) where {N} = copy!(dst, adjoint(src))
 Base.permutedims!(dst::StridedView{<:Any,N}, src::StridedView{<:Any,N}, p) where {N} = copy!(dst, permutedims(src, p))
 
 # Converting back to other DenseArray type:
@@ -146,9 +119,10 @@ const StridedMatVecView{T} = Union{StridedView{T,1},StridedView{T,2}}
     import LinearAlgebra: mul!
 else
     const mul! = Base.A_mul_B!
-    Base.Ac_mul_B!(C::StridedView, A::StridedView, B::StridedView) = Base.A_mul_B!(C, A', B)
-    Base.A_mul_Bc!(C::StridedView, A::StridedView, B::StridedView) = Base.A_mul_B!(C, A, B')
-    Base.Ac_mul_Bc!(C::StridedView, A::StridedView, B::StridedView) = Base.A_mul_B!(C, A', B')
+    export mul!
+    Base.Ac_mul_B!(C::StridedView, A::StridedView, B::StridedView) = mul!(C, A', B)
+    Base.A_mul_Bc!(C::StridedView, A::StridedView, B::StridedView) = mul!(C, A, B')
+    Base.Ac_mul_Bc!(C::StridedView, A::StridedView, B::StridedView) = mul!(C, A', B')
     Base.scale!(C::StridedView{<:Number,N}, a::Number, B::StridedView{<:Number,N}) where {N} = mul!(C, a, B)
     Base.scale!(C::StridedView{<:Number,N}, A::StridedView{<:Number,N}, b::Number) where {N} = mul!(C, A, b)
 end
@@ -156,26 +130,40 @@ end
 mul!(dst::StridedView{<:Number,N}, α::Number, src::StridedView{<:Number,N}) where {N} = α == 1 ? copy!(dst, src) : map!(x->α*x, dst, src)
 mul!(dst::StridedView{<:Number,N}, src::StridedView{<:Number,N}, α::Number) where {N} = α == 1 ? copy!(dst, src) : map!(x->x*α, dst, src)
 axpy!(a::Number, X::StridedView{<:Number,N}, Y::StridedView{<:Number,N}) where {N} = a == 1 ? map!(+, Y, X, Y) : map!((x,y)->(a*x+y), Y, X, Y)
-axpby!(a::Number, X::StridedView{<:Number,N}, b::Number, Y::StridedView{<:Number,N}) where {N} = map!((x,y)->(a*x+b*y), Y, X, Y)
+axpby!(a::Number, X::StridedView{<:Number,N}, b::Number, Y::StridedView{<:Number,N}) where {N} = b == 1 ? axpy!(a, X, Y) : map!((x,y)->(a*x+b*y), Y, X, Y)
 
-function mul!(C::StridedMatVecView{T}, A::StridedMatVecView{T}, B::StridedMatVecView{T}) where {T<:LinearAlgebra.BlasFloat}
-    if !(any(equalto(1), strides(A)) && any(equalto(1), strides(B)) && any(equalto(1), strides(C)))
-        LinearAlgebra.generic_matmatmul!(C,'N','N',A,B)
-        return C
-    end
-
+function mul!(C::StridedView{<:Any,2}, A::StridedView{<:Any,2}, B::StridedView{<:Any,2})
     if C.op == conj
-        if stride(C,1) == 1
-            mul!(conj(C), conj(A), conj(B))
+        if stride(C,1) < stride(C,2)
+            _mul!(conj(C), conj(A), conj(B))
         else
-            mul!(C', B', A')
+            _mul!(C', B', A')
         end
-        return C
-    elseif stride(C,1) != 1
-        mul!(transpose(C), transpose(B), transpose(A))
-        return C
+    elseif stride(C,1) > stride(C,2)
+        _mul!(transpose(C), transpose(B), transpose(A))
+    else
+        _mul!(C, A, B)
     end
-    # if we reach here, we know that C is in standard form
+    return C
+end
+
+_mul!(C::StridedView{<:Any,2}, A::StridedView{<:Any,2}, B::StridedView{<:Any,2}) = __mul!(C, A, B)
+function __mul!(C::StridedView{<:Any,2}, A::StridedView{<:Any,2}, B::StridedView{<:Any,2})
+    if stride(A,1) < stride(A,2) && stride(B,1) < stride(B,2)
+        LinearAlgebra.generic_matmatmul!(C,'N','N',A,B)
+    elseif stride(A,1) < stride(A,2)
+        LinearAlgebra.generic_matmatmul!(C,'N','T',A,transpose(B))
+    elseif stride(B,1) < stride(B,2)
+        LinearAlgebra.generic_matmatmul!(C,'T','N',transpose(A),B)
+    else
+        LinearAlgebra.generic_matmatmul!(C,'T','T',transpose(A),transpose(B))
+    end
+    return C
+end
+function _mul!(C::StridedView{T,2}, A::StridedView{T,2}, B::StridedView{T,2}) where {T<:LinearAlgebra.BlasFloat}
+    if !(any(equalto(1), strides(A)) && any(equalto(1), strides(B)) && any(equalto(1), strides(C)))
+        return __mul!(C,A,B)
+    end
     if A.op == identity
         if stride(A,1) == 1
             A2 = A
@@ -215,10 +203,44 @@ end
 @inline _computeind(indices::Tuple{}, strides::Tuple{}) = 1
 @inline _computeind(indices::NTuple{N,Int}, strides::NTuple{N,Int}) where {N} = (indices[1]-1)*strides[1] + _computeind(tail(indices), tail(strides))
 
-@inline _computenewstride(stride::Int, size::Int) = (stride,)
-@inline _computenewstride(stride::Int, size::Tuple{}) = ()
-@inline _computenewstride(stride::Int, size::Tuple{Vararg{Int}}) = (stride, _computenewstride(stride*size[1], tail(size))...)
+_computereshapestrides(newsize::Tuple{}, oldsize::Tuple{}, strides::Tuple{}) = ()
+function _computereshapestrides(newsize::Tuple{}, oldsize::Dims{N}, strides::Dims{N}) where {N}
+    all(equalto(1), oldsize) || (@show oldsize; throw(DimensionMismatch()))
+    return ()
+end
+function _computereshapestrides(newsize::Dims, oldsize::Tuple{}, strides::Tuple{})
+    all(equalto(1), newsize)
+    return map(n->1, newsize)
+end
+function _computereshapestrides(newsize::Dims{1}, oldsize::Dims{1}, strides::Dims{1})
+    newsize[1] == oldsize[1] || (@show (newsize, oldsize); throw(DimensionMismatch()))
+    return (strides[1],)
+end
+function _computereshapestrides(newsize::Dims, oldsize::Dims{1}, strides::Dims{1})
+    newsize[1] == 1 && return (strides[1], _computereshapestrides(tail(newsize), oldsize, strides)...)
 
-@inline _computenewstrides(strides::Tuple{Int}, sizes::Tuple{SizeType}) = _computenewstride(strides[1], sizes[1])
-@inline _computenewstrides(strides::NTuple{N,Int}, sizes::NTuple{N,SizeType}) where {N} =
-    (_computenewstride(strides[1], sizes[1])..., _computenewstrides(tail(strides), tail(sizes))...)
+    if newsize[1] <= oldsize[1]
+        d,r = divrem(oldsize[1], newsize[1])
+        r == 0 || throw(ReshapeException())
+
+        return (strides[1], _computereshapestrides(tail(newsize), (d,), (newsize[1]*strides[1],))...)
+    else
+        throw(DimensionMismatch())
+    end
+end
+
+function _computereshapestrides(newsize::Dims, oldsize::Dims{N}, strides::Dims{N}) where {N}
+    newsize[1] == 1 && return (strides[1], _computereshapestrides(tail(newsize), oldsize, strides)...)
+    oldsize[1] == 1 && return _computereshapestrides(newsize, tail(oldsize), tail(strides))
+
+    d,r = divrem(oldsize[1], newsize[1])
+    if r == 0
+        return (strides[1], _computereshapestrides(tail(newsize), (d, tail(oldsize)...), (newsize[1]*strides[1], tail(strides)...))...)
+    else
+        if oldsize[1]*strides[1] == strides[2]
+            return _computereshapestrides(newsize, (oldsize[1]*oldsize[2], TupleTools.tail2(oldsize)...), (strides[1], TupleTools.tail2(strides)...))
+        else
+            throw(ReshapeException())
+        end
+    end
+end

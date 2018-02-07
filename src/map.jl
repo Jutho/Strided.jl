@@ -152,7 +152,7 @@ end
 const BLOCKSIZE = 1024
 function map_recursive!(f::F, dims::NTuple{N,Int}, minstrides::NTuple{N,Int}, arrs::NTuple{M,StridedView{<:Any,N}}, arrstrides::NTuple{M,NTuple{N,Int}}, offsets::NTuple{M,Int}) where {F,N,M}
     l = TupleTools.prod(dims)
-    if l <= BLOCKSIZE || (dims[1] == l && all(equalto(1), map(first, arrstrides)))
+    if l <= BLOCKSIZE || TupleTools.maximum(dims) == l # only one non-trivial dimension
         map_rkernel!(f, dims, arrs, arrstrides, offsets)
     else
         i = TupleTools.argmax( (dims .- 1) .* minstrides )

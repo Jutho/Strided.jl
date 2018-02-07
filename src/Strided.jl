@@ -1,12 +1,12 @@
 module Strided
 
 import Base: parent, size, strides, tail, setindex
-using Base: @propagate_inbounds, RangeIndex
+using Base: @propagate_inbounds, RangeIndex, Dims
 
 using TupleTools
 using TupleTools: StaticLength
 
-export StridedView, StridedIterator, BlockedIterator, splitdims, sview
+export StridedView, sview
 
 using Compat
 
