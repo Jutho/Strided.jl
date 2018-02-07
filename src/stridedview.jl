@@ -85,9 +85,16 @@ function adjoint(a::StridedView{<:Any,2}) # act recursively, like base
 end
 
 function Base.reshape(a::StridedView, newsize::Dims)
-    newstrides = _computereshapestrides(newsize, size(a), strides(a))
+    if any(equalto(0), newsize)
+        any(equalto(0), size(a)) || throw(DimensionMismatch())
+        newstrides = _defaultstrides(newsize)
+    else
+        newstrides = _computereshapestrides(newsize, size(a), strides(a))
+    end
     StridedView(a.parent, newsize, newstrides, a.offset, a.op)
 end
+_defaultstrides(sz::Tuple{}, s = 1) = ()
+_defaultstrides(sz::Dims, s = 1) = (s, _defaultstrides(tail(sz), s*sz[1])...)
 
 struct ReshapeException <: Exception
 end
@@ -205,7 +212,7 @@ end
 
 _computereshapestrides(newsize::Tuple{}, oldsize::Tuple{}, strides::Tuple{}) = ()
 function _computereshapestrides(newsize::Tuple{}, oldsize::Dims{N}, strides::Dims{N}) where {N}
-    all(equalto(1), oldsize) || (@show oldsize; throw(DimensionMismatch()))
+    all(equalto(1), oldsize) || throw(DimensionMismatch())
     return ()
 end
 function _computereshapestrides(newsize::Dims, oldsize::Tuple{}, strides::Tuple{})
@@ -213,7 +220,7 @@ function _computereshapestrides(newsize::Dims, oldsize::Tuple{}, strides::Tuple{
     return map(n->1, newsize)
 end
 function _computereshapestrides(newsize::Dims{1}, oldsize::Dims{1}, strides::Dims{1})
-    newsize[1] == oldsize[1] || (@show (newsize, oldsize); throw(DimensionMismatch()))
+    newsize[1] == oldsize[1] || throw(DimensionMismatch())
     return (strides[1],)
 end
 function _computereshapestrides(newsize::Dims, oldsize::Dims{1}, strides::Dims{1})
