@@ -142,14 +142,21 @@ axpby!(a::Number, X::StridedView{<:Number,N}, b::Number, Y::StridedView{<:Number
 function mul!(C::StridedView{<:Any,2}, A::StridedView{<:Any,2}, B::StridedView{<:Any,2})
     if C.op == conj
         if stride(C,1) < stride(C,2)
-            _mul!(conj(C), conj(A), conj(B))
+            mul!(conj(C), conj(A), conj(B))
         else
-            _mul!(C', B', A')
+            mul!(C', B', A')
         end
     elseif stride(C,1) > stride(C,2)
-        _mul!(transpose(C), transpose(B), transpose(A))
+        mul!(transpose(C), transpose(B), transpose(A))
     else
-        _mul!(C, A, B)
+        if Threads.nthreads() == 1 || Threads.in_threaded_loop[] || prod(size(C)) < Threads.nthreads()*1024
+            _mul!(C, A, B)
+        else
+            mranges, nranges = _computethreadedmulblocks(size(C,1), size(C,2))
+            @inbounds Threads.@threads for i = 1:Threads.nthreads()
+                _mul!(sview(C, mranges[i], nranges[i]), sview(A, mranges[i], :), sview(B, :, nranges[i]))
+            end
+        end
     end
     return C
 end
@@ -249,5 +256,44 @@ function _computereshapestrides(newsize::Dims, oldsize::Dims{N}, strides::Dims{N
         else
             throw(ReshapeException())
         end
+    end
+end
+
+function _computethreadedmulblocks end
+let
+    const mranges = Vector{UnitRange{Int}}(Threads.nthreads())
+    const nranges = Vector{UnitRange{Int}}(Threads.nthreads())
+    const factors = simpleprimefactorization(Threads.nthreads())
+    global _computethreadedmulblocks
+    @inbounds function _computethreadedmulblocks(m,n)
+        divm = 1
+        divn = 1
+        for i = length(factors):-1:1
+            if m*divn > n*divm
+                divm *= factors[i]
+            else
+                divn *= factors[i]
+            end
+        end
+        bm, rm = divrem(m, divm)
+        bn, rn = divrem(n, divn)
+        moffset = 0
+        noffset = 0
+
+        for i = 1:divm
+            mnew = moffset + bm + ifelse(rm >= i, 1, 0)
+            for j = 1:divn
+                mranges[i+(j-1)*divm] = (moffset+1):(mnew)
+            end
+            moffset = mnew
+        end
+        for j = 1:divn
+            nnew = noffset + bn + ifelse(rn >= j, 1, 0)
+            for i = 1:divm
+                nranges[i+(j-1)*divm] = (noffset+1):(nnew)
+            end
+            noffset = nnew
+        end
+        return mranges, nranges
     end
 end
