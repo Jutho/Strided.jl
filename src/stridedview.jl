@@ -19,9 +19,7 @@ StridedView(a::StridedArray) = StridedView(parent(a), size(a), strides(a), offse
 offset(a::DenseArray) = 0
 offset(a::SubArray) = Base.first_index(a) - 1
 offset(a::Base.ReshapedArray) = 0
-# if VERSION >= v"0.7-"
-#     offset(a::ReinterpretedArray) = 0
-# end
+offset(a::Base.ReinterpretArray) = 0
 
 # Methods for StridedView
 Base.parent(a::StridedView) = a.parent
@@ -30,6 +28,8 @@ Base.strides(a::StridedView) = a.strides
 Base.stride(a::StridedView, n::Int) = a.strides[n]
 offset(a::StridedView) = a.offset
 Base.first_index(a::StridedView) = a.offset + 1
+
+Base.dataids(a::StridedView) = Base.dataids(a.parent)
 
 Base.IndexStyle(::Type{<:StridedView}) = Base.IndexCartesian()
 
@@ -54,7 +54,7 @@ end
 @propagate_inbounds @inline Base.setindex!(a::StridedView, v, I::ParentIndex) = (setindex!(a.parent, a.op(v), I.i); return a)
 
 Base.similar(a::StridedView, ::Type{T}, dims::NTuple{N,Int}) where {N,T}  = StridedView(similar(a.parent, T, dims))
-Base.copy(a::StridedView) = copy!(similar(a), a)
+Base.copy(a::StridedView) = copyto!(similar(a), a)
 
 # Specialized methods for `StridedView` which produce views/share data
 Base.conj(a::StridedView{<:Real}) = a
@@ -70,9 +70,9 @@ function Base.permutedims(a::StridedView{<:Any,N}, p) where {N}
     return StridedView(a.parent, newsize, newstrides, a.offset, a.op)
 end
 
-Base.transpose(a::StridedView{<:Any,2}) = permutedims(a,(2,1))
-adjoint(a::StridedView{<:Number,2}) = permutedims(conj(a),(2,1))
-function adjoint(a::StridedView{<:Any,2}) # act recursively, like base
+LinearAlgebra.transpose(a::StridedView{<:Any,2}) = permutedims(a, (2,1))
+LinearAlgebra.adjoint(a::StridedView{<:Number,2}) = permutedims(conj(a), (2,1))
+function LinearAlgebra.adjoint(a::StridedView{<:Any,2}) # act recursively, like Base
     if isa(a.f, FN)
         return permutedims(StridedView(a.parent, a.size, a.strides, a.offset, adjoint), (2,1))
     elseif isa(a.f, FC)
@@ -85,8 +85,8 @@ function adjoint(a::StridedView{<:Any,2}) # act recursively, like base
 end
 
 function Base.reshape(a::StridedView, newsize::Dims)
-    if any(equalto(0), newsize)
-        any(equalto(0), size(a)) || throw(DimensionMismatch())
+    if any(isequal(0), newsize)
+        any(isequal(0), size(a)) || throw(DimensionMismatch())
         newstrides = _defaultstrides(newsize)
     else
         newstrides = _computereshapestrides(newsize, size(a), strides(a))
@@ -101,45 +101,38 @@ end
 Base.show(io::IO, e::ReshapeException) = print(io, "Cannot produce a reshaped StridedView without allocating, try reshape(copy(array), newsize)")
 
 # Methods based on map!
-Base.copy!(dst::StridedView{<:Any,N}, src::StridedView{<:Any,N}) where {N} = map!(identity, dst, src)
+Base.copyto!(dst::StridedView{<:Any,N}, src::StridedView{<:Any,N}) where {N} = map!(identity, dst, src)
+Base.conj!(a::StridedView{<:Real}) = a
 Base.conj!(a::StridedView) = map!(conj, a, a)
-adjoint!(dst::StridedView{<:Any,N}, src::StridedView{<:Any,N}) where {N} = copy!(dst, adjoint(src))
-Base.permutedims!(dst::StridedView{<:Any,N}, src::StridedView{<:Any,N}, p) where {N} = copy!(dst, permutedims(src, p))
+LinearAlgebra.adjoint!(dst::StridedView{<:Any,N}, src::StridedView{<:Any,N}) where {N} = copyto!(dst, adjoint(src))
+Base.permutedims!(dst::StridedView{<:Any,N}, src::StridedView{<:Any,N}, p) where {N} = copyto!(dst, permutedims(src, p))
 
 # Converting back to other DenseArray type:
 Base.convert(T::Type{<:StridedView}, a::StridedView) = a
 function Base.convert(T::Type{<:DenseArray}, a::StridedView)
-    b = T(uninitialized, size(a))
-    copy!(StridedView(b), a)
+    b = T(undef, size(a))
+    copyto!(StridedView(b), a)
     return b
 end
 function Base.convert(::Type{Array}, a::StridedView{T}) where {T}
-    b = Array{T}(uninitialized, size(a))
-    copy!(StridedView(b), a)
+    b = Array{T}(undef, size(a))
+    copyto!(StridedView(b), a)
     return b
 end
 Base.unsafe_convert(::Type{Ptr{T}}, a::StridedView{T}) where {T} = pointer(a.parent, a.offset+1)
 
 const StridedMatVecView{T} = Union{StridedView{T,1},StridedView{T,2}}
 
-@static if isdefined(LinearAlgebra, :mul!)
-    import LinearAlgebra: mul!
-else
-    const mul! = Base.A_mul_B!
-    export mul!
-    Base.Ac_mul_B!(C::StridedView, A::StridedView, B::StridedView) = mul!(C, A', B)
-    Base.A_mul_Bc!(C::StridedView, A::StridedView, B::StridedView) = mul!(C, A, B')
-    Base.Ac_mul_Bc!(C::StridedView, A::StridedView, B::StridedView) = mul!(C, A', B')
-    Base.scale!(C::StridedView{<:Number,N}, a::Number, B::StridedView{<:Number,N}) where {N} = mul!(C, a, B)
-    Base.scale!(C::StridedView{<:Number,N}, A::StridedView{<:Number,N}, b::Number) where {N} = mul!(C, A, b)
-end
 
-mul!(dst::StridedView{<:Number,N}, α::Number, src::StridedView{<:Number,N}) where {N} = α == 1 ? copy!(dst, src) : map!(x->α*x, dst, src)
-mul!(dst::StridedView{<:Number,N}, src::StridedView{<:Number,N}, α::Number) where {N} = α == 1 ? copy!(dst, src) : map!(x->x*α, dst, src)
-axpy!(a::Number, X::StridedView{<:Number,N}, Y::StridedView{<:Number,N}) where {N} = a == 1 ? map!(+, Y, X, Y) : map!((x,y)->(a*x+y), Y, X, Y)
-axpby!(a::Number, X::StridedView{<:Number,N}, b::Number, Y::StridedView{<:Number,N}) where {N} = b == 1 ? axpy!(a, X, Y) : map!((x,y)->(a*x+b*y), Y, X, Y)
+LinearAlgebra.rmul!(dst::StridedView, α::Number) = mul!(dst, dst, α)
+LinearAlgebra.lmul!(α::Number, dst::StridedView) = mul!(dst, α, dst)
 
-function mul!(C::StridedView{<:Any,2}, A::StridedView{<:Any,2}, B::StridedView{<:Any,2})
+LinearAlgebra.mul!(dst::StridedView{<:Number,N}, α, src::StridedView{<:Number,N}) where {N} = α == 1 ? copyto!(dst, src) : map!(x->α*x, dst, src)
+LinearAlgebra.mul!(dst::StridedView{<:Number,N}, src::StridedView{<:Number,N}, α::Number) where {N} = α == 1 ? copyto!(dst, src) : map!(x->x*α, dst, src)
+LinearAlgebra.axpy!(a::Number, X::StridedView{<:Number,N}, Y::StridedView{<:Number,N}) where {N} = a == 1 ? map!(+, Y, X, Y) : map!((x,y)->(a*x+y), Y, X, Y)
+LinearAlgebra.axpby!(a::Number, X::StridedView{<:Number,N}, b::Number, Y::StridedView{<:Number,N}) where {N} = b == 1 ? axpy!(a, X, Y) : map!((x,y)->(a*x+b*y), Y, X, Y)
+
+function LinearAlgebra.mul!(C::StridedView{<:Any,2}, A::StridedView{<:Any,2}, B::StridedView{<:Any,2})
     if C.op == conj
         if stride(C,1) < stride(C,2)
             mul!(conj(C), conj(A), conj(B))
@@ -175,7 +168,7 @@ function __mul!(C::StridedView{<:Any,2}, A::StridedView{<:Any,2}, B::StridedView
     return C
 end
 function _mul!(C::StridedView{T,2}, A::StridedView{T,2}, B::StridedView{T,2}) where {T<:LinearAlgebra.BlasFloat}
-    if !(any(equalto(1), strides(A)) && any(equalto(1), strides(B)) && any(equalto(1), strides(C)))
+    if !(any(isequal(1), strides(A)) && any(isequal(1), strides(B)) && any(isequal(1), strides(C)))
         return __mul!(C,A,B)
     end
     if A.op == identity
@@ -219,11 +212,11 @@ end
 
 _computereshapestrides(newsize::Tuple{}, oldsize::Tuple{}, strides::Tuple{}) = ()
 function _computereshapestrides(newsize::Tuple{}, oldsize::Dims{N}, strides::Dims{N}) where {N}
-    all(equalto(1), oldsize) || throw(DimensionMismatch())
+    all(isequal(1), oldsize) || throw(DimensionMismatch())
     return ()
 end
 function _computereshapestrides(newsize::Dims, oldsize::Tuple{}, strides::Tuple{})
-    all(equalto(1), newsize)
+    all(isequal(1), newsize)
     return map(n->1, newsize)
 end
 function _computereshapestrides(newsize::Dims{1}, oldsize::Dims{1}, strides::Dims{1})
@@ -261,9 +254,9 @@ end
 
 function _computethreadedmulblocks end
 let
-    const mranges = Vector{UnitRange{Int}}(Threads.nthreads())
-    const nranges = Vector{UnitRange{Int}}(Threads.nthreads())
-    const factors = simpleprimefactorization(Threads.nthreads())
+    mranges = Vector{UnitRange{Int}}(undef, Threads.nthreads())
+    nranges = Vector{UnitRange{Int}}(undef, Threads.nthreads())
+    factors = simpleprimefactorization(Threads.nthreads())
     global _computethreadedmulblocks
     @inbounds function _computethreadedmulblocks(m,n)
         divm = 1

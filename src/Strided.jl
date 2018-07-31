@@ -3,39 +3,18 @@ module Strided
 import Base: parent, size, strides, tail, setindex
 using Base: @propagate_inbounds, RangeIndex, Dims
 
+using LinearAlgebra
+
 using TupleTools
 using TupleTools: StaticLength
 
 export StridedView, sview
 
-using Compat
 
-@static if VERSION < v"0.7-"
-    const adjoint = Base.ctranspose
-    const adjoint! = Base.ctranspose!
-
-    import Base.LinAlg: scale!, axpy!
-    """
-        axpby!(a, X, b, Y)
-
-    Overwrite Y with X*a + Y*b, where a and b are scalars. Return Y.
-    """
-    function axpby! end
-
-    const LinearAlgebra = Base.LinAlg
-else
-    using LinearAlgebra
-    import LinearAlgebra: adjoint, adjoint!, axpy!, axpby!, mul!
-end
-
-@static if VERSION < v"0.7.0-DEV.3155"
-    const popfirst! = shift!
-end
-
-function __init__()
-    LinearAlgebra.BLAS.set_num_threads(1)
-    Threads.nthreads() == 1 && warn("Strided disables BLAS multithreading, enable Julia threading (`export JULIA_NUM_THREADS = N`) to benefit from multithreaded matrix multiplication and more")
-end
+# function __init__()
+#     LinearAlgebra.BLAS.set_num_threads(1)
+#     Threads.nthreads() == 1 && warn("Strided disables BLAS multithreading, enable Julia threading (`export JULIA_NUM_THREADS = N`) to benefit from multithreaded matrix multiplication and more")
+# end
 
 # for use in combination with treading
 function simpleprimefactorization(n::Int)
