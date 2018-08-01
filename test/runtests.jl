@@ -109,7 +109,7 @@ end
     end
 end
 
-@testset "map!, scale!, axpy! and axpby!" begin
+@testset "map, scale!, axpy! and axpby!" begin
     @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
         @testset for N = 2:6
             dims = ntuple(n->div(60,N), N)
@@ -125,5 +125,25 @@ end
             @test axpby!(1//3, B1, 1//2, B3) ≈ axpby!(1//3, A1, 1//2, A3)
             @test map((x,y,z)->sin(x)+y/exp(-abs(z)), B1, B2, B3) ≈ map((x,y,z)->sin(x)+y/exp(-abs(z)), A1, A2, A3)
         end
+    end
+end
+
+@testset "broadcast" begin
+    @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
+        B1 = StridedView(rand(T, (10,)))
+        B2 = permutedims(StridedView(rand(T, (10,10))), randperm(2))
+        B3 = permutedims(StridedView(rand(T, (10,10,10))), randperm(3))
+        A1 = convert(Array, B1)
+        A2 = convert(Array, B2)
+        A3 = convert(Array, B3)
+
+        @test @inferred(B1 .+ sin.(B2 .- 3)) ≈ A1 .+ sin.(A2 .- 3)
+        @test @inferred(B2' .* B3 .- Ref(0.5)) ≈ A2' .* A3 .- Ref(0.5)
+        @test @inferred(B2' .* B3 .- max.(abs.(B1),real.(B3))) ≈ A2' .* A3 .- max.(abs.(A1),real.(A3))
+
+        @test (B1 .+ sin.(B2 .- 3)) isa StridedView
+        @test (B2' .* B3 .- Ref(0.5)) isa StridedView
+        @test (B2' .* B3 .- max.(abs.(B1),real.(B3))) isa StridedView
+        @test (B2' .* A3 .- max.(abs.(B1),real.(B3))) isa Array
     end
 end

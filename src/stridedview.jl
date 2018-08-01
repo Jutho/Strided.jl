@@ -12,9 +12,8 @@ struct StridedView{T,N,A<:DenseArray{T},F<:Union{FN,FC,FA,FT}} <: DenseArray{T,N
     op::F
 end
 
-StridedView(a::A, size::NTuple{N,Int}, strides::NTuple{N,Int}, offset::Int, op::F = identity) where {T,N,A<:DenseArray{T},F<:Union{FN,FC,FA,FT}} = StridedView{T,N,A,F}(a, size, strides, offset, op)
-
-StridedView(a::StridedArray) = StridedView(parent(a), size(a), strides(a), offset(a), identity)
+StridedView(a::A, size::NTuple{N,Int}, strides::NTuple{N,Int}, offset::Int) where {T,N,A<:DenseArray{T}} = StridedView{T,N,A,FN}(a, size, strides, offset, identity)
+StridedView(a::StridedArray) = StridedView(parent(a), size(a), strides(a), offset(a))
 
 offset(a::DenseArray) = 0
 offset(a::SubArray) = Base.first_index(a) - 1
@@ -25,7 +24,7 @@ offset(a::Base.ReinterpretArray) = 0
 Base.parent(a::StridedView) = a.parent
 Base.size(a::StridedView) = a.size
 Base.strides(a::StridedView) = a.strides
-Base.stride(a::StridedView, n::Int) = a.strides[n]
+Base.stride(a::StridedView{<:Any, N}, n::Int) where {N} = (n <= N) ? a.strides[n] : a.strides[N]*a.size[N]
 offset(a::StridedView) = a.offset
 Base.first_index(a::StridedView) = a.offset + 1
 
@@ -84,7 +83,7 @@ function LinearAlgebra.adjoint(a::StridedView{<:Any,2}) # act recursively, like 
     end
 end
 
-function Base.reshape(a::StridedView, newsize::Dims)
+function sreshape(a::StridedView, newsize::Dims)
     if any(isequal(0), newsize)
         any(isequal(0), size(a)) || throw(DimensionMismatch())
         newstrides = _defaultstrides(newsize)
@@ -98,7 +97,7 @@ _defaultstrides(sz::Dims, s = 1) = (s, _defaultstrides(tail(sz), s*sz[1])...)
 
 struct ReshapeException <: Exception
 end
-Base.show(io::IO, e::ReshapeException) = print(io, "Cannot produce a reshaped StridedView without allocating, try reshape(copy(array), newsize)")
+Base.show(io::IO, e::ReshapeException) = print(io, "Cannot produce a reshaped StridedView without allocating, try sreshape(copy(array), newsize) or fall back to reshape(array, newsize)")
 
 # Methods based on map!
 Base.copyto!(dst::StridedView{<:Any,N}, src::StridedView{<:Any,N}) where {N} = map!(identity, dst, src)

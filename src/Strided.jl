@@ -8,7 +8,7 @@ using LinearAlgebra
 using TupleTools
 using TupleTools: StaticLength
 
-export StridedView, sview
+export StridedView, sview, sreshape
 
 
 # function __init__()
@@ -36,5 +36,6 @@ end
 include("stridedview.jl")
 include("sview.jl")
 include("map.jl")
+include("broadcast.jl")
 
 end
