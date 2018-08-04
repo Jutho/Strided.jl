@@ -4,7 +4,7 @@ const FA = typeof(adjoint)
 const FT = typeof(transpose)
 
 # StridedView
-struct StridedView{T,N,A<:DenseArray{T},F<:Union{FN,FC,FA,FT}} <: DenseArray{T,N}
+struct StridedView{T,N,A<:DenseArray{T},F<:Union{FN,FC,FA,FT}} <: AbstractArray{T,N}
     parent::A
     size::NTuple{N,Int}
     strides::NTuple{N,Int}
@@ -202,7 +202,7 @@ function _mul!(C::StridedView{T,2}, A::StridedView{T,2}, B::StridedView{T,2}) wh
             return LinearAlgebra.generic_matmatmul!(C,'N','N',A,B)
         end
     end
-    LinearAlgebra.gemm_wrapper!(C,cA,cB,A2,B2)
+    LinearAlgebra.BLAS.gemm!(cA,cB,one(T),A2,B2,zero(T),C)
 end
 
 # Auxiliary routines

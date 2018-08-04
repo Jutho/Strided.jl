@@ -76,7 +76,7 @@ end
 @testset "reshape and permutedims" begin
     @testset for T in (Float32, Float64, Complex{Float32}, Complex{Float64})
         @testset for N = 2:6
-            dims = ntuple(n->rand(1:10), N)
+            dims = ntuple(n->rand(1:div(60,N)), N)
             A = rand(T, dims)
             B = StridedView(copy(A))
             @test conj(A) == conj(B)
@@ -98,7 +98,7 @@ end
             @test copy(B2) == A2
             @test convert(Array, B2) == A2
 
-            B2 = reshape(B, (2, 5, ntuple(n->10, N-2)..., 5, 2))
+            B2 = sreshape(B, (2, 5, ntuple(n->10, N-2)..., 5, 2))
             A2 = reshape(A, (2, 5, ntuple(n->10, N-2)..., 5, 2))
             A3 = reshape(copy(A), size(A2))
             @test B2 == A3

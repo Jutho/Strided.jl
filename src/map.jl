@@ -2,36 +2,17 @@ const BLOCKSIZE = 1024
 
 function Base.map!(f::F, b::StridedView{<:Any,N}, a1::StridedView{<:Any,N}, A::Vararg{StridedView{<:Any,N}}) where {F,N}
     dims = size(b)
+
     # Check dimesions
-    size(a1) == dims || throw(DimensionMismatch)
+    size(a1) == dims || throw(DimensionMismatch())
     for a in A
-        size(a) == dims || throw(DimensionMismatch)
+        size(a) == dims || throw(DimensionMismatch())
     end
-    l = prod(dims)
-    if l == 0
-        # don't do anything
-    elseif l <= BLOCKSIZE
-        allstrides = map(strides, (b, a1, A...))
-        offsets = map(offset, (b, a1, A...))
-        map_iterative!(f, dims, dims, (b, a1, A...), allstrides, offsets)
-    else
-        mapi!(f, dims, b, a1, A...)
-    end
-    return b
-end
 
-function mapi!(f::F, dims::NTuple{N,Int}, b::StridedView{<:Any,N}, a::StridedView{<:Any,N}) where {F,N}
-    # Sort loops based on minimal memory jumps
-    # As = (b, a1, A...)
-    bstrides = strides(b)
-    astrides = strides(a)
-    minstrides = map(min, bstrides, astrides)
-    p = TupleTools._sortperm((dims .- 1) .* minstrides)
-    dims = TupleTools.getindices(dims, p)
-    minstrides = TupleTools.getindices(minstrides, p)
-    allstrides = (TupleTools.getindices(bstrides, p), TupleTools.getindices(astrides, p))
+    any(isequal(0), dims) && return b # don't do anything
 
-    # Fuse dimensions if possible
+    # Fuse dimensions if possible: assume that at least one array (e.g. output b) has its strides sorted
+    allstrides = map(strides, (b, a1, A...))
     @inbounds for i = N:-1:2
         merge = true
         for s in allstrides
@@ -41,70 +22,66 @@ function mapi!(f::F, dims::NTuple{N,Int}, b::StridedView{<:Any,N}, a::StridedVie
             end
         end
         if merge
-            dims = setindex(dims, dims[i-1]*dims[i], i-1)
-            dims = setindex(dims, 1, i)
+            dims = TupleTools.setindex(dims, dims[i-1]*dims[i], i-1)
+            dims = TupleTools.setindex(dims, 1, i)
         end
     end
 
-    blocks = _computeblocks(dims, minstrides, allstrides)
-    offsets = (offset(b), offset(a))
-    if Threads.nthreads() == 1 || Threads.in_threaded_loop[] || prod(dims) < Threads.nthreads()*prod(blocks)
-        map_iterative!(f, dims, blocks, (b, a), allstrides, offsets)
-    else
-        n = Threads.nthreads()
-        threadblocks, threadoffsets = _computethreadblocks(n, dims, minstrides, allstrides, offsets)
-        _mapit!(threadblocks, threadoffsets, f, blocks, (b, a), allstrides)
-    end
+    _map!(f, dims, allstrides, (b, a1, A...))
+
     return b
 end
-function mapi!(f::F, dims::NTuple{N,Int}, b::StridedView{<:Any,N}, a1::StridedView{<:Any,N}, a2::StridedView{<:Any,N}, A::Vararg{StridedView{<:Any,N}}) where {F,N}
-    # Sort loops based on minimal memory jumps
-    bstrides = strides(b)
-    a1strides = strides(a1)
-    a2strides = strides(a2)
-    Astrides = map(strides, A)
-    allstrides = (bstrides, a1strides, a2strides, Astrides...)
-    minstrides = map(min, map(min, map(min, bstrides, a1strides), a2strides), Astrides...)
-    p = TupleTools._sortperm(map((x,y)->(x-1)*y,dims,minstrides))
-    dims = TupleTools.getindices(dims, p)
-    minstrides = TupleTools.getindices(minstrides, p)
-    allstrides = let q = p
-        map(s->TupleTools.getindices(s, q), allstrides)
-    end
 
-    # Fuse dimensions if possible
-    @inbounds for i = N:-1:2
-        merge = true
-        for s in allstrides
-            if s[i] != dims[i-1]*s[i-1]
-                merge = false
-                break
+function _map!(f::F, dims::NTuple{N,Int}, strides::NTuple{M, NTuple{N,Int}}, arrays::NTuple{M,StridedView}) where {F,N,M}
+    i = findfirst(isequal(1), dims)
+    if !(i isa Nothing) # delete indices of size 1
+        newdims = TupleTools.deleteat(dims, i)
+        newstrides = broadcast(TupleTools.deleteat, strides, (i,))
+        _map!(f, newdims, newstrides, arrays)
+    else
+        # sort order of loops/dimensions by modelling the importance of each dimension
+        g = ceil(Int, log2(M+2)) # to account for the fact that there are M arrays, where the first one is counted with a factor 2
+        importance = 2 .* ( 1 .<< (g.*(N .- indexorder(strides[1]))))  # first array is output and is more important by a factor 2
+        for k = 2:M
+            importance = importance .+ ( 1 .<< (g.*(N .- indexorder(strides[k]))))
+        end
+
+        p = TupleTools.sortperm(importance, rev = true)
+
+        dims = TupleTools.getindices(dims, p)
+        strides = broadcast(TupleTools.getindices, strides, (p,))
+        offsets = map(offset, arrays)
+
+        if all(l -> l<=BLOCKSIZE, broadcast(_length, (dims,), strides))
+            _map_kernel!(f, dims, dims, arrays, strides, offsets)
+        else
+            minstrides = map(min, strides...)
+            mincosts = map(a->ifelse(iszero(a), 1, a << 1), minstrides)
+            blocks = _computeblocks(dims, mincosts, strides)
+
+            if Threads.nthreads() == 1 || Threads.in_threaded_loop[] || prod(dims) < Threads.nthreads()*prod(blocks)
+                _map_kernel!(f, dims, blocks, arrays, strides, offsets)
+            else
+                mincosts = mincosts .* .!(iszero.(strides[1]))
+                # make cost of dimensions with zero stride in output array (reduction dimensions),
+                # so that they are not divided in threading (which would lead to race errors)
+
+                n = Threads.nthreads()
+                threadblocks, threadoffsets = _computethreadblocks(n, dims, mincosts, strides, offsets)
+                _map_threaded!(threadblocks, threadoffsets, f, blocks, arrays, strides)
             end
         end
-        if merge
-            dims = setindex(dims, dims[i-1]*dims[i], i-1)
-            dims = setindex(dims, 1, i)
-        end
     end
-
-    blocks = _computeblocks(dims, minstrides, allstrides)
-    offsets = map(offset, (b, a1, a2, A...))
-    if Threads.nthreads() == 1 || Threads.in_threaded_loop[] || prod(dims) < Threads.nthreads()*prod(blocks)
-        map_iterative!(f, dims, blocks, (b, a1, a2, A...), allstrides, offsets)
-    else
-        n = Threads.nthreads()
-        threadblocks, threadoffsets = _computethreadblocks(n, dims, minstrides, allstrides, offsets)
-        _mapit!(threadblocks, threadoffsets, f, blocks, (b, a1, a2, A...), allstrides)
-    end
-    return b
+    return
 end
-@noinline function _mapit!(threadblocks, threadoffsets, f, blocks, As, allstrides)
+
+@noinline function _map_threaded!(threadblocks, threadoffsets, f::F, blocks::NTuple{N,Int}, arrays::NTuple{M,StridedView}, strides::NTuple{M,NTuple{N,Int}}) where {F,N,M}
     @inbounds Threads.@threads for i = 1:length(threadblocks)
-        map_iterative!(f, threadblocks[i], blocks, As, allstrides, threadoffsets[i])
+        _map_kernel!(f, threadblocks[i], blocks, arrays, strides, threadoffsets[i])
     end
 end
 
-@generated function map_iterative!(f::F, dims::NTuple{N,Int}, blocks::NTuple{N,Int}, As::NTuple{M,StridedView{<:Any,N}}, strides::NTuple{M,NTuple{N,Int}}, offsets::NTuple{M,Int}) where {F,N,M}
+@generated function _map_kernel!(f::F, dims::NTuple{N,Int}, blocks::NTuple{N,Int}, arrays::NTuple{M,StridedView}, strides::NTuple{M,NTuple{N,Int}}, offsets::NTuple{M,Int}) where {F,N,M}
     blockloopvars = [Symbol("J$i") for i = 1:N]
     blockdimvars = [Symbol("d$i") for i = 1:N]
     innerloopvars = [Symbol("j$i") for i = 1:N]
@@ -112,7 +89,7 @@ end
     stridevars = [Symbol("stride_$(i)_$(j)") for i = 1:N, j = 1:M]
     Ivars = [Symbol("I$j") for j = 1:M]
     Avars = [Symbol("A$j") for j = 1:M]
-    pre1 = Expr(:block, [:($(Avars[j]) = As[$j]) for j = 1:M]...)
+    pre1 = Expr(:block, [:($(Avars[j]) = arrays[$j]) for j = 1:M]...)
     pre2 = Expr(:block, [:($(stridevars[i,j]) = strides[$j][$i]) for i = 1:N, j=1:M]...)
     pre3 = Expr(:block, [:($(Ivars[j]) = offsets[$j]+1) for j = 1:M]...)
 
@@ -155,31 +132,60 @@ end
     end
 end
 
-_computeblocks(dims::Tuple{}, minstrides::Tuple{}, allstrides::Tuple{Vararg{Tuple{}}}, blocksize::Int = BLOCKSIZE) = ()
-function _computeblocks(dims::NTuple{N,Int}, minstrides::NTuple{N,Int}, allstrides::Tuple{Vararg{NTuple{N,Int}}}, blocksize::Int = BLOCKSIZE) where {N}
-    # minstrides is assumed to be sorted
-    if prod(dims) <= blocksize
+function indexorder(strides::NTuple{N,Int}) where {N}
+    # returns order such that strides[i] is the order[i]th smallest element of strides, not counting zero strides
+    # zero strides have order N
+    return ntuple(Val(N)) do i
+        si = strides[i]
+        si == 0 && return N
+        k = 1
+        for s in strides
+            if s != 0 && s < si
+                k += 1
+            end
+        end
+        return k
+    end
+end
+
+_length(dims::Tuple, strides::Tuple) = ifelse(iszero(strides[1]), 1, dims[1]) * _length(Base.tail(dims), Base.tail(strides))
+_length(dims::Tuple{}, strides::Tuple{}) = 1
+_maxlength(dims::Tuple, strides::Tuple{Vararg{Tuple}}) = maximum(broadcast(_length, (dims,), strides))
+
+function _lastargmax(t::Tuple)
+    i = 1
+    for j = 2:length(t)
+        @inbounds if t[j] >= t[i]
+            i = j
+        end
+    end
+    return i
+end
+
+_computeblocks(dims::Tuple{}, costs::Tuple{}, strides::Tuple{Vararg{Tuple{}}}, blocksize::Int = BLOCKSIZE) = ()
+function _computeblocks(dims::NTuple{N,Int}, costs::NTuple{N,Int}, strides::Tuple{Vararg{NTuple{N,Int}}}, blocksize::Int = BLOCKSIZE) where {N}
+    if _maxlength(dims, strides) <= blocksize
         return dims
-    elseif all(isequal(1), map(TupleTools.argmin, allstrides))
-        return (dims[1], _computeblocks(tail(dims), tail(minstrides), map(tail, allstrides), div(blocksize, dims[1]))...)
+    elseif all(isequal(1), map(TupleTools.argmin, strides))
+        return (dims[1], _computeblocks(tail(dims), tail(costs), map(tail, strides), div(blocksize, dims[1]))...)
     elseif blocksize == 0
         return ntuple(n->1, StaticLength(N))
     else
         blocks = dims
-        while prod(blocks) >= 2*blocksize
-            i = TupleTools.argmax((blocks .- 1).*minstrides)
-            blocks = setindex(blocks, (blocks[i]+1)>>1, i)
+        while _maxlength(blocks, strides) >= 2*blocksize
+            i = _lastargmax((blocks .- 1) .* costs)
+            blocks = TupleTools.setindex(blocks, (blocks[i]+1)>>1, i)
         end
-        while prod(blocks) > blocksize
-            i = TupleTools.argmax((blocks .- 1).*minstrides)
-            blocks = setindex(blocks, blocks[i]-1, i)
+        while _maxlength(blocks, strides) > blocksize
+            i = _lastargmax((blocks .- 1) .* costs)
+            blocks = TupleTools.setindex(blocks, blocks[i]-1, i)
         end
         return blocks
     end
 end
-function _computethreadblocks(n::Int, dims::NTuple{N,Int}, minstrides::NTuple{N,Int}, allstrides::NTuple{M,NTuple{N,Int}}, offsets::NTuple{M,Int}) where {N,M}
-    factors = reverse!(simpleprimefactorization(n))
 
+function _computethreadblocks(n::Int, dims::NTuple{N,Int}, costs::NTuple{N,Int}, strides::NTuple{M,NTuple{N,Int}}, offsets::NTuple{M,Int}) where {N,M}
+    factors = reverse!(simpleprimefactorization(n))
     threadblocks = [dims]
     threadoffsets = [offsets]
     for k in factors
@@ -187,16 +193,14 @@ function _computethreadblocks(n::Int, dims::NTuple{N,Int}, minstrides::NTuple{N,
         for j = 1:l
             dims = popfirst!(threadblocks)
             offsets = popfirst!(threadoffsets)
-            i = TupleTools.argmax((dims.-k).*minstrides) # make sure that ndi is at least 1 by subtracting k from dims
+            i = _lastargmax((dims .- k) .* costs)
             ndi = div(dims[i], k)
             newdims = setindex(dims, ndi, i)
-            stridesi = let j = i
-                map(s->s[j], allstrides)
-            end
+            stridesi = getindex.(strides, i)
             for m = 1:k-1
                 push!(threadblocks, newdims)
                 push!(threadoffsets, offsets)
-                offsets = offsets .+ ndi.* stridesi
+                offsets = offsets .+ ndi .* stridesi
             end
             ndi = dims[i]-(k-1)*ndi
             newdims = setindex(dims, ndi, i)
