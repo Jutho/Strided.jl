@@ -44,6 +44,10 @@ end
     return a
 end
 
+function Base.getindex(a::StridedView{<:Any,N}, I::Vararg{Union{RangeIndex,Colon},N}) where {N}
+    StridedView(a.parent, _computeviewsize(a.size, I), _computeviewstrides(a.strides, I), a.offset + _computeviewoffset(a.strides, I), a.op)
+end
+
 # ParentIndex: index directly into parent array
 struct ParentIndex
     i::Int
@@ -121,7 +125,6 @@ end
 Base.unsafe_convert(::Type{Ptr{T}}, a::StridedView{T}) where {T} = pointer(a.parent, a.offset+1)
 
 const StridedMatVecView{T} = Union{StridedView{T,1},StridedView{T,2}}
-
 
 LinearAlgebra.rmul!(dst::StridedView, α::Number) = mul!(dst, dst, α)
 LinearAlgebra.lmul!(α::Number, dst::StridedView) = mul!(dst, α, dst)
@@ -208,6 +211,37 @@ end
 # Auxiliary routines
 @inline _computeind(indices::Tuple{}, strides::Tuple{}) = 1
 @inline _computeind(indices::NTuple{N,Int}, strides::NTuple{N,Int}) where {N} = (indices[1]-1)*strides[1] + _computeind(tail(indices), tail(strides))
+
+@inline function _computeviewsize(oldsize::NTuple{N,Int}, I::NTuple{N,Union{RangeIndex,Colon}}) where {N}
+    if isa(I[1], Int)
+        return _computeviewsize(tail(oldsize), tail(I))
+    elseif isa(I[1], Colon)
+        return (oldsize[1], _computeviewsize(tail(oldsize), tail(I))...)
+    else
+        return (length(I[1]), _computeviewsize(tail(oldsize), tail(I))...)
+    end
+end
+_computeviewsize(::Tuple{}, ::Tuple{}) = ()
+
+@inline function _computeviewstrides(oldstrides::NTuple{N,Int}, I::NTuple{N,Union{RangeIndex,Colon}}) where {N}
+    if isa(I[1], Int)
+        return _computeviewstrides(tail(oldstrides), tail(I))
+    elseif isa(I[1], Colon)
+        return (oldstrides[1], _computeviewstrides(tail(oldstrides), tail(I))...)
+    else
+        return (oldstrides[1]*step(I[1]), _computeviewstrides(tail(oldstrides), tail(I))...)
+    end
+end
+_computeviewstrides(::Tuple{}, ::Tuple{}) = ()
+
+@inline function _computeviewoffset(strides::NTuple{N,Int}, I::NTuple{N,Union{RangeIndex,Colon}}) where {N}
+    if isa(I[1], Colon)
+        return _computeviewoffset(tail(strides), tail(I))
+    else
+        return (first(I[1])-1)*strides[1]+_computeviewoffset(tail(strides), tail(I))
+    end
+end
+_computeviewoffset(::Tuple{}, ::Tuple{}) = 0
 
 _computereshapestrides(newsize::Tuple{}, oldsize::Tuple{}, strides::Tuple{}) = ()
 function _computereshapestrides(newsize::Tuple{}, oldsize::Dims{N}, strides::Dims{N}) where {N}

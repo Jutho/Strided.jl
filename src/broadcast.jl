@@ -31,6 +31,8 @@ function Base.copyto!(dest::StridedView{<:Any,N}, bc::Broadcasted{StridedArraySt
     end
 end
 
+Base.dotview(a::StridedView{<:Any,N}, I::Vararg{Union{RangeIndex,Colon},N}) where {N} = getindex(a, I...)
+
 promoteshape(sz::Dims, a1::StridedView, As...) = (promoteshape1(sz, a1), promoteshape(sz, As...)...)
 promoteshape(sz::Dims) = ()
 function promoteshape1(sz::Dims{N}, a::StridedView) where {N}
