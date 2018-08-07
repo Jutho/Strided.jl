@@ -15,6 +15,7 @@ export StridedView, @strided, sreshape
 #     Threads.nthreads() == 1 && warn("Strided disables BLAS multithreading, enable Julia threading (`export JULIA_NUM_THREADS = N`) to benefit from multithreaded matrix multiplication and more")
 # end
 
+# used to factor the number of threads
 function simpleprimefactorization(n::Int)
     factors = Vector{Int}()
     k = 2
@@ -39,12 +40,14 @@ macro strided(ex)
 end
 
 function _strided(ex::Expr)
-    if ex.head == :call
+    if ex.head == :call && ex.args[1] isa Symbol
         if ex.args[1] == :reshape
             return Expr(:call, :sreshape, _strided.(ex.args[2:end])...)
         else
-            return Expr(:call, ex.args[1], _strided.(ex.args[2:end])...)
+            return Expr(:call, esc(ex.args[1]), _strided.(ex.args[2:end])...)
         end
+    elseif ex.head == :(=) && ex.args[1] isa Symbol
+        return Expr(:(=), esc(ex.args[1]), Expr(:call, :maybeunstrided, _strided(ex.args[2])))
     else
         return Expr(ex.head, _strided.(ex.args)...)
     end
@@ -55,5 +58,8 @@ _strided(ex) = ex
 
 maybestrided(A::DenseArray) = StridedView(A)
 maybestrided(A) = A
+maybeunstrided(A::StridedView) = parent(A)
+maybeunstrided(A) = A
+
 
 end

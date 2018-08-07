@@ -65,7 +65,7 @@ end
 
 function _mapreducedim_impl!(f::F, op::G, dims::NTuple{N,Int}, strides::NTuple{M, NTuple{N,Int}}, arrays::NTuple{M,StridedView}) where {F,G,N,M}
     # sort order of loops/dimensions by modelling the importance of each dimension
-    g = ceil(Int, log2(M+2)) # to account for the fact that there are M arrays, where the first one is counted with a factor 2
+    g = 8*sizeof(Int) - leading_zeros(M+1) # ceil(Int, log2(M+2)) # to account for the fact that there are M arrays, where the first one is counted with a factor 2
     importance = 2 .* ( 1 .<< (g.*(N .- indexorder(strides[1]))))  # first array is output and is more important by a factor 2
     for k = 2:M
         importance = importance .+ ( 1 .<< (g.*(N .- indexorder(strides[k]))))
@@ -84,8 +84,8 @@ function _mapreducedim_impl!(f::F, op::G, dims::NTuple{N,Int}, strides::NTuple{M
         mincosts = map(a->ifelse(iszero(a), 1, a << 1), minstrides)
         blocks = _computeblocks(dims, mincosts, strides)
 
-        @show dims, strides, blocks, p
-
+        # @show dims, strides, blocks, p
+        #
         if Threads.nthreads() == 1 || Threads.in_threaded_loop[] || prod(dims) < Threads.nthreads()*prod(blocks)
             _mapreduce_kernel!(f, op, dims, blocks, arrays, strides, offsets)
         else
@@ -127,9 +127,12 @@ end
     i = 1
     if N >= 1
         ex = quote
-            @simd for $(innerloopvars[i]) = Base.OneTo($(blockdimvars[i]))
+            $(innerloopvars[i]) = 0
+            while $(innerloopvars[i]) < $(blockdimvars[i])
                 $ex
                 $(Expr(:block, [:($(Ivars[j]) += $(stridevars[i,j])) for j = 1:M]...))
+                $(innerloopvars[i]) += 1
+                $(Expr(:simdloop, true))  # Mark loop as SIMD loop
             end
             $(Expr(:block, [:($(Ivars[j]) -=  $(blockdimvars[i]) * $(stridevars[i,j])) for j = 1:M]...))
         end
@@ -227,7 +230,7 @@ let
             for j = 1:l
                 dims = popfirst!(threadblocks)
                 offsets = popfirst!(threadoffsets)
-                i = _lastargmax((dims .- k) .* costs)
+                i = _lastargmax((dims .- (k-1)) .* costs)
                 ndi = div(dims[i], k)
                 newdims = setindex(dims, ndi, i)
                 stridesi = getindex.(strides, i)
