@@ -12,13 +12,8 @@ struct StridedView{T,N,A<:DenseArray{T},F<:Union{FN,FC,FA,FT}} <: AbstractArray{
     op::F
 end
 
-StridedView(a::A, size::NTuple{N,Int}, strides::NTuple{N,Int}, offset::Int) where {T,N,A<:DenseArray{T}} = StridedView{T,N,A,FN}(a, size, strides, offset, identity)
-StridedView(a::StridedArray) = StridedView(parent(a), size(a), strides(a), offset(a))
-
-offset(a::DenseArray) = 0
-offset(a::SubArray) = Base.first_index(a) - 1
-offset(a::Base.ReshapedArray) = 0
-offset(a::Base.ReinterpretArray) = 0
+StridedView(a::A, size::NTuple{N,Int}, strides::NTuple{N,Int}, offset::Int = 0) where {T,N,A<:DenseArray{T}} = StridedView{T,N,A,FN}(a, size, strides, offset, identity)
+StridedView(a::DenseArray) = StridedView(parent(a), size(a), strides(a))
 
 # Methods for StridedView
 Base.parent(a::StridedView) = a.parent
@@ -44,7 +39,8 @@ end
     return a
 end
 
-function Base.getindex(a::StridedView{<:Any,N}, I::Vararg{Union{RangeIndex,Colon},N}) where {N}
+# force inlining so that view typically does not need to be created
+@inline function Base.getindex(a::StridedView{<:Any,N}, I::Vararg{Union{RangeIndex,Colon},N}) where {N}
     StridedView(a.parent, _computeviewsize(a.size, I), _computeviewstrides(a.strides, I), a.offset + _computeviewoffset(a.strides, I), a.op)
 end
 
@@ -53,8 +49,8 @@ struct ParentIndex
     i::Int
 end
 
-@propagate_inbounds @inline Base.getindex(a::StridedView, I::ParentIndex) = a.op(getindex(a.parent, I.i))
-@propagate_inbounds @inline Base.setindex!(a::StridedView, v, I::ParentIndex) = (setindex!(a.parent, a.op(v), I.i); return a)
+@propagate_inbounds Base.getindex(a::StridedView, I::ParentIndex) = a.op(getindex(a.parent, I.i))
+@propagate_inbounds Base.setindex!(a::StridedView, v, I::ParentIndex) = (setindex!(a.parent, a.op(v), I.i); return a)
 
 Base.similar(a::StridedView, ::Type{T}, dims::NTuple{N,Int}) where {N,T}  = StridedView(similar(a.parent, T, dims))
 Base.copy(a::StridedView) = copyto!(similar(a), a)
@@ -66,7 +62,7 @@ Base.conj(a::StridedView{T,N,A,FC}) where {T,N,A} = StridedView{T,N,A,FN}(a.pare
 Base.conj(a::StridedView{T,N,A,FT}) where {T,N,A} = StridedView{T,N,A,FA}(a.parent, a.size, a.strides, a.offset, adjoint)
 Base.conj(a::StridedView{T,N,A,FA}) where {T,N,A} = StridedView{T,N,A,FT}(a.parent, a.size, a.strides, a.offset, transpose)
 
-function Base.permutedims(a::StridedView{<:Any,N}, p) where {N}
+@inline function Base.permutedims(a::StridedView{<:Any,N}, p) where {N}
     (length(p) == N && TupleTools.isperm(p)) || throw(ArgumentError("Invalid permutation of length $N: $p"))
     newsize = TupleTools._permute(a.size, p)
     newstrides = TupleTools._permute(a.strides, p)
@@ -87,7 +83,7 @@ function LinearAlgebra.adjoint(a::StridedView{<:Any,2}) # act recursively, like 
     end
 end
 
-function sreshape(a::StridedView, newsize::Dims)
+@inline function sreshape(a::StridedView, newsize::Dims)
     if any(isequal(0), newsize)
         any(isequal(0), size(a)) || throw(DimensionMismatch())
         newstrides = _defaultstrides(newsize)

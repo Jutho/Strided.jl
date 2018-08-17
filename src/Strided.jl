@@ -8,7 +8,7 @@ using LinearAlgebra
 using TupleTools
 using TupleTools: StaticLength
 
-export StridedView, @strided
+export StridedView, @strided, sreshape
 
 # function __init__()
 #     LinearAlgebra.BLAS.set_num_threads(1)
@@ -60,6 +60,5 @@ maybestrided(A::DenseArray) = StridedView(A)
 maybestrided(A) = A
 maybeunstrided(A::StridedView) = parent(A)
 maybeunstrided(A) = A
-
 
 end
