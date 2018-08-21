@@ -48,14 +48,14 @@ function promoteshape1(sz::Dims{N}, a::StridedView) where {N}
     return StridedView(a.parent, sz, newstrides, a.offset, a.op)
 end
 
-capturestridedargs(t::Broadcasted, rest...) = (capturestridedargs(t.args...)..., capturestridedargs(rest...)...)
-capturestridedargs(t::StridedView, rest...) = (t, capturestridedargs(rest...)...)
-capturestridedargs(t, rest...) = capturestridedargs(rest...)
-capturestridedargs() = ()
+@inline capturestridedargs(t::Broadcasted, rest...) = (capturestridedargs(t.args...)..., capturestridedargs(rest...)...)
+@inline capturestridedargs(t::StridedView, rest...) = (t, capturestridedargs(rest...)...)
+@inline capturestridedargs(t, rest...) = capturestridedargs(rest...)
+@inline capturestridedargs() = ()
 
 const WrappedScalarArgs = Union{AbstractArray{<:Any,0}, Ref{<:Any}}
 
-make_makeargs(bc::Broadcasted) = make_makeargs(()->(), bc.args)
+@inline make_makeargs(bc::Broadcasted) = make_makeargs(()->(), bc.args)
 @inline function make_makeargs(makeargs, t::Tuple{<:StridedView,Vararg{Any}})
     let makeargs = make_makeargs(makeargs, tail(t))
         return @inline function(head, tail::Vararg{Any,N}) where N
@@ -97,4 +97,4 @@ end
         end
     end
 end
-make_makeargs(makeargs, ::Tuple{}) = makeargs
+@inline make_makeargs(makeargs, ::Tuple{}) = makeargs

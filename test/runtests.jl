@@ -124,6 +124,8 @@ end
             @test axpy!(1//3, B1, B2) ≈ axpy!(1//3, A1, A2)
             @test axpby!(1//3, B1, 1//2, B3) ≈ axpby!(1//3, A1, 1//2, A3)
             @test map((x,y,z)->sin(x)+y/exp(-abs(z)), B1, B2, B3) ≈ map((x,y,z)->sin(x)+y/exp(-abs(z)), A1, A2, A3)
+            @test map((x,y,z)->sin(x)+y/exp(-abs(z)), B1, B2, B3) isa StridedView
+            @test map((x,y,z)->sin(x)+y/exp(-abs(z)), B1, A2, B3) isa Array
         end
     end
 end

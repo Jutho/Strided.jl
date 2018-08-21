@@ -1,5 +1,10 @@
 const BLOCKSIZE = 1024
 
+function Base.map(f::F, a1::StridedView{<:Any,N}, A::Vararg{StridedView{<:Any,N}}) where {F,N}
+    T = Base.promote_eltype(a1, A...)
+    map!(f, similar(a1, T), a1, A...)
+end
+
 function Base.map!(f::F, b::StridedView{<:Any,N}, a1::StridedView{<:Any,N}, A::Vararg{StridedView{<:Any,N}}) where {F,N}
     dims = size(b)
 
