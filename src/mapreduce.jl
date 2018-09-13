@@ -1,11 +1,11 @@
 const BLOCKSIZE = 1024
 
-function Base.map(f::F, a1::StridedView{<:Any,N}, A::Vararg{StridedView{<:Any,N}}) where {F,N}
+function Base.map(f::F, a1::AbstractStridedView{<:Any,N}, A::Vararg{AbstractStridedView{<:Any,N}}) where {F,N}
     T = Base.promote_eltype(a1, A...)
     map!(f, similar(a1, T), a1, A...)
 end
 
-function Base.map!(f::F, b::StridedView{<:Any,N}, a1::StridedView{<:Any,N}, A::Vararg{StridedView{<:Any,N}}) where {F,N}
+function Base.map!(f::F, b::AbstractStridedView{<:Any,N}, a1::AbstractStridedView{<:Any,N}, A::Vararg{AbstractStridedView{<:Any,N}}) where {F,N}
     dims = size(b)
 
     # Check dimesions
@@ -21,7 +21,7 @@ function Base.map!(f::F, b::StridedView{<:Any,N}, a1::StridedView{<:Any,N}, A::V
     return b
 end
 
-function Base.mapreducedim!(f::F, op::G, b::StridedView{<:Any,N}, a1::StridedView{<:Any,N}, A::Vararg{StridedView{<:Any,N}}) where {F,G,N}
+function Base.mapreducedim!(f::F, op::G, b::AbstractStridedView{<:Any,N}, a1::AbstractStridedView{<:Any,N}, A::Vararg{AbstractStridedView{<:Any,N}}) where {F,G,N}
     outdims = size(b)
     dims = map(max, outdims, map(max, map(size, (a1, A...))...))
 
@@ -35,8 +35,9 @@ function Base.mapreducedim!(f::F, op::G, b::StridedView{<:Any,N}, a1::StridedVie
     return b
 end
 
-function _mapreducedim1!(f::F, op::G, dims::NTuple{N,Int}, arrays::NTuple{M,StridedView}) where {F,G,N,M}
-    # Level 1: fuse dimensions if possible: assume that at least one array has its strides sorted
+function _mapreducedim1!(f::F, op::G, dims::NTuple{N,Int}, arrays::NTuple{M,AbstractStridedView}) where {F,G,N,M}
+    # Level 1: fuse dimensions if possible: assume that at least one array, e.g. the output array in arrays[1],
+    # has its strides sorted
     allstrides = map(strides, arrays)
     @inbounds for i = N:-1:2
         merge = true
@@ -55,7 +56,7 @@ function _mapreducedim1!(f::F, op::G, dims::NTuple{N,Int}, arrays::NTuple{M,Stri
     return
 end
 
-function _mapreducedim2!(f::F, op::G, dims::NTuple{N,Int}, strides::NTuple{M, NTuple{N,Int}}, arrays::NTuple{M,StridedView}) where {F,G,N,M}
+function _mapreducedim2!(f::F, op::G, dims::NTuple{N,Int}, strides::NTuple{M, NTuple{N,Int}}, arrays::NTuple{M,AbstractStridedView}) where {F,G,N,M}
     # Level 2: recursively delete dimensions of size 1
     i = findfirst(isequal(1), dims)
     if !(i isa Nothing)
@@ -68,7 +69,7 @@ function _mapreducedim2!(f::F, op::G, dims::NTuple{N,Int}, strides::NTuple{M, NT
     return
 end
 
-function _mapreducedim_impl!(f::F, op::G, dims::NTuple{N,Int}, strides::NTuple{M, NTuple{N,Int}}, arrays::NTuple{M,StridedView}) where {F,G,N,M}
+function _mapreducedim_impl!(f::F, op::G, dims::NTuple{N,Int}, strides::NTuple{M, NTuple{N,Int}}, arrays::NTuple{M,AbstractStridedView}) where {F,G,N,M}
     # sort order of loops/dimensions by modelling the importance of each dimension
     g = 8*sizeof(Int) - leading_zeros(M+1) # ceil(Int, log2(M+2)) # to account for the fact that there are M arrays, where the first one is counted with a factor 2
     importance = 2 .* ( 1 .<< (g.*(N .- indexorder(strides[1]))))  # first array is output and is more important by a factor 2
@@ -106,13 +107,13 @@ function _mapreducedim_impl!(f::F, op::G, dims::NTuple{N,Int}, strides::NTuple{M
     return
 end
 
-@noinline function _mapreduce_threaded!(threadblocks, threadoffsets, f::F, op::G, blocks::NTuple{N,Int}, arrays::NTuple{M,StridedView}, strides::NTuple{M,NTuple{N,Int}}) where {F,G,N,M}
+@noinline function _mapreduce_threaded!(threadblocks, threadoffsets, f::F, op::G, blocks::NTuple{N,Int}, arrays::NTuple{M,AbstractStridedView}, strides::NTuple{M,NTuple{N,Int}}) where {F,G,N,M}
     @inbounds Threads.@threads for i = 1:length(threadblocks)
         _mapreduce_kernel!(f, op, threadblocks[i], blocks, arrays, strides, threadoffsets[i])
     end
 end
 
-@generated function _mapreduce_kernel!(f::F, op::G, dims::NTuple{N,Int}, blocks::NTuple{N,Int}, arrays::NTuple{M,StridedView}, strides::NTuple{M,NTuple{N,Int}}, offsets::NTuple{M,Int}) where {F,G,N,M}
+@generated function _mapreduce_kernel!(f::F, op::G, dims::NTuple{N,Int}, blocks::NTuple{N,Int}, arrays::NTuple{M,AbstractStridedView}, strides::NTuple{M,NTuple{N,Int}}, offsets::NTuple{M,Int}) where {F,G,N,M}
     blockloopvars = [Symbol("J$i") for i = 1:N]
     blockdimvars = [Symbol("d$i") for i = 1:N]
     innerloopvars = [Symbol("j$i") for i = 1:N]
@@ -223,11 +224,9 @@ function _computeblocks(dims::NTuple{N,Int}, costs::NTuple{N,Int}, strides::Tupl
 end
 
 function _computethreadblocks end
-let
-    factors = reverse!(simpleprimefactorization(Threads.nthreads()))
+let factors = reverse!(simpleprimefactorization(Threads.nthreads()))
     global _computethreadblocks
     @inbounds function _computethreadblocks(n::Int, dims::NTuple{N,Int}, costs::NTuple{N,Int}, strides::NTuple{M,NTuple{N,Int}}, offsets::NTuple{M,Int}) where {N,M}
-        factors = reverse!(simpleprimefactorization(n))
         threadblocks = [dims]
         threadoffsets = [offsets]
         for k in factors

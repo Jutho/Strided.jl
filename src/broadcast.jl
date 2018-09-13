@@ -3,7 +3,7 @@ using Base.Broadcast: BroadcastStyle, AbstractArrayStyle, DefaultArrayStyle, Bro
 struct StridedArrayStyle{N} <: AbstractArrayStyle{N}
 end
 
-Broadcast.BroadcastStyle(::Type{<:StridedView{<:Any,N}}) where {N} = StridedArrayStyle{N}()
+Broadcast.BroadcastStyle(::Type{<:AbstractStridedView{<:Any,N}}) where {N} = StridedArrayStyle{N}()
 
 StridedArrayStyle(::Val{N}) where {N} = StridedArrayStyle{N}()
 StridedArrayStyle{M}(::Val{N}) where {M,N} = StridedArrayStyle{N}()
@@ -16,11 +16,11 @@ function Base.similar(bc::Broadcasted{<:StridedArrayStyle{N}}, eltype::T) where 
     StridedView(similar(convert(Broadcasted{DefaultArrayStyle{N}}, bc), eltype))
 end
 
-function Base.copyto!(dest::StridedView{<:Any,N}, bc::Broadcasted{StridedArrayStyle{N}}) where {N}
+function Base.copyto!(dest::AbstractStridedView{<:Any,N}, bc::Broadcasted{StridedArrayStyle{N}}) where {N}
     # convert to map
 
-    # flatten and only keep the StridedView arguments
-    # promote StridedView to have same size, by giving artificial zero strides
+    # flatten and only keep the AbstractStridedView arguments
+    # promote AbstractStridedView to have same size, by giving artificial zero strides
     stridedargs = promoteshape(size(dest), capturestridedargs(bc)...)
 
     let makeargs = make_makeargs(bc)
@@ -31,9 +31,9 @@ function Base.copyto!(dest::StridedView{<:Any,N}, bc::Broadcasted{StridedArraySt
     end
 end
 
-Base.dotview(a::StridedView{<:Any,N}, I::Vararg{Union{RangeIndex,Colon},N}) where {N} = getindex(a, I...)
+Base.dotview(a::AbstractStridedView{<:Any,N}, I::Vararg{Union{RangeIndex,Colon},N}) where {N} = getindex(a, I...)
 
-promoteshape(sz::Dims, a1::StridedView, As...) = (promoteshape1(sz, a1), promoteshape(sz, As...)...)
+promoteshape(sz::Dims, a1::AbstractStridedView, As...) = (promoteshape1(sz, a1), promoteshape(sz, As...)...)
 promoteshape(sz::Dims) = ()
 function promoteshape1(sz::Dims{N}, a::StridedView) where {N}
     newstrides = ntuple(Val(N)) do d
@@ -47,16 +47,28 @@ function promoteshape1(sz::Dims{N}, a::StridedView) where {N}
     end
     return StridedView(a.parent, sz, newstrides, a.offset, a.op)
 end
+function promoteshape1(sz::Dims{N}, a::UnsafeStridedView) where {N}
+    newstrides = ntuple(Val(N)) do d
+        if size(a, d) == sz[d]
+            stride(a, d)
+        elseif size(a, d) == 1
+            0
+        else
+            throw(DimensionMismatch("array could not be broadcast to match destination"))
+        end
+    end
+    return UnsafeStridedView(a.ptr, sz, newstrides, a.offset, a.op)
+end
 
 @inline capturestridedargs(t::Broadcasted, rest...) = (capturestridedargs(t.args...)..., capturestridedargs(rest...)...)
-@inline capturestridedargs(t::StridedView, rest...) = (t, capturestridedargs(rest...)...)
+@inline capturestridedargs(t::AbstractStridedView, rest...) = (t, capturestridedargs(rest...)...)
 @inline capturestridedargs(t, rest...) = capturestridedargs(rest...)
 @inline capturestridedargs() = ()
 
 const WrappedScalarArgs = Union{AbstractArray{<:Any,0}, Ref{<:Any}}
 
 @inline make_makeargs(bc::Broadcasted) = make_makeargs(()->(), bc.args)
-@inline function make_makeargs(makeargs, t::Tuple{<:StridedView,Vararg{Any}})
+@inline function make_makeargs(makeargs, t::Tuple{<:AbstractStridedView,Vararg{Any}})
     let makeargs = make_makeargs(makeargs, tail(t))
         return @inline function(head, tail::Vararg{Any,N}) where N
             (head, makeargs(tail...)...)
