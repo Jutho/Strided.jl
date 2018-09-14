@@ -8,7 +8,7 @@ using LinearAlgebra
 using TupleTools
 using TupleTools: StaticLength
 
-export StridedView, @strided, @unsafe_strided, sreshape
+export StridedView, @strided, @unsafe_strided, sreshape, sview
 
 # function __init__()
 #     LinearAlgebra.BLAS.set_num_threads(1)

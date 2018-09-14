@@ -132,6 +132,12 @@ struct ReshapeException <: Exception
 end
 Base.show(io::IO, e::ReshapeException) = print(io, "Cannot produce a reshaped StridedView without allocating, try sreshape(copy(array), newsize) or fall back to reshape(array, newsize)")
 
+@inline sview(a::AbstractStridedView{<:Any,N}, I::Vararg{Union{RangeIndex,Colon},N}) where {N} = getindex(a, I...)
+@inline sview(a::AbstractStridedView, I::Union{RangeIndex,Colon}) = getindex(sreshape(a, (length(a),)), I...)
+
+@inline sview(a::DenseArray{<:Any,N}, I::Vararg{Union{RangeIndex,Colon},N}) where {N} = getindex(StridedView(a), I...)
+@inline sview(a::DenseArray, I::Union{RangeIndex,Colon}) = getindex(sreshape(StridedView(a), (length(a),)), I...)
+
 # Auxiliary routines
 @inline _computeind(indices::Tuple{}, strides::Tuple{}) = 1
 @inline _computeind(indices::NTuple{N,Int}, strides::NTuple{N,Int}) where {N} = (indices[1]-1)*strides[1] + _computeind(tail(indices), tail(strides))
