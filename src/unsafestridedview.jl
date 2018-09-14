@@ -9,6 +9,8 @@ end
 
 UnsafeStridedView(a::Ptr{T}, size::NTuple{N,Int}, strides::NTuple{N,Int}, offset::Int = 0) where {T,N} = UnsafeStridedView{T,N,FN}(a, size, strides, offset, identity)
 UnsafeStridedView(a::StridedArray) = UnsafeStridedView(pointer(a), size(a), strides(a))
+UnsafeStridedView(a::Adjoint{<:Any, <:StridedArray}) = UnsafeStridedView(a')'
+UnsafeStridedView(a::Transpose{<:Any, <:StridedArray}) = transpose(UnsafeStridedView(transpose(a)))
 
 # Methods for UnsafeStridedView
 Base.size(a::UnsafeStridedView) = a.size

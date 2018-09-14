@@ -92,7 +92,7 @@ function _mapreducedim_impl!(f::F, op::G, dims::NTuple{N,Int}, strides::NTuple{M
 
         # @show dims, strides, blocks, p
         #
-        if Threads.nthreads() == 1 || Threads.in_threaded_loop[] || prod(dims) < Threads.nthreads()*prod(blocks)
+        if Threads.nthreads() == 1 || Threads.in_threaded_loop[] || prod(dims) < BLOCKSIZE
             _mapreduce_kernel!(f, op, dims, blocks, arrays, strides, offsets)
         else
             mincosts = mincosts .* .!(iszero.(strides[1]))
