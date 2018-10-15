@@ -220,14 +220,16 @@ function _computeblocks(dims::NTuple{N,Int}, costs::NTuple{N,Int}, strides::Tupl
     end
 end
 
-const factors = Ref([1])
+const factors = []
 function __init__()
-    factors[] = reverse!(simpleprimefactorization(Threads.nthreads()))
+    f = reverse!(simpleprimefactorization(Threads.nthreads()))
+    resize!(factors, length(f))
+    copyto!(factors, f)
 end
 @inbounds function _computethreadblocks(dims::NTuple{N,Int}, costs::NTuple{N,Int}, strides::NTuple{M,NTuple{N,Int}}, offsets::NTuple{M,Int}) where {N,M}
     threadblocks = [dims]
     threadoffsets = [offsets]
-    for k in factors[]
+    for k in factors
         l = length(threadblocks)
         for j = 1:l
             dims = popfirst!(threadblocks)

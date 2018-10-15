@@ -23,6 +23,7 @@ const exclusionlist = Symbol[:(:)]
 _strided(ex::Symbol) =  ex in exclusionlist ? ex : Expr(:call, :(Strided.maybestrided), ex)
 _strided(ex) = ex
 
+maybestrided(A::AbstractStridedView) = A
 maybestrided(A::DenseArray) = StridedView(A)
 maybestrided(A::Adjoint{<:Any, <:DenseArray}) = StridedView(A)
 maybestrided(A::Transpose{<:Any, <:DenseArray}) = StridedView(A)
@@ -32,7 +33,7 @@ maybeunstrided(A) = A
 
 macro unsafe_strided(args...)
     syms = args[1:end-1]
-    ex = _strided(args[end])
+    ex = args[end]#_strided(args[end])
     all(isa(s, Symbol) for s in syms) || error("The first arguments to `@unsafe_strided` must be variable names")
     ex = Expr(:let, Expr(:block, [:($s = Strided.UnsafeStridedView($s)) for s in syms]...), ex)
     return esc(:(GC.@preserve $(syms...) $ex))
