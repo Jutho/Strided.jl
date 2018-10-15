@@ -28,42 +28,42 @@ julia> A = randn(4000,4000);
 julia> B = similar(A);
 
 julia> @btime $B .= ($A .+ $A') ./ 2;
-  142.064 ms (0 allocations: 0 bytes)
+  145.214 ms (0 allocations: 0 bytes)
 
 julia> @btime @strided $B .= ($A .+ $A') ./ 2;
-  60.006 ms (13 allocations: 592 bytes)
+  56.189 ms (6 allocations: 352 bytes)
 
 julia> A = randn(1000,1000);
 
 julia> B = similar(A);
 
 julia> @btime $B .= 3 .* $A';
-  2.117 ms (0 allocations: 0 bytes)
+  2.449 ms (0 allocations: 0 bytes)
 
 julia> @btime @strided $B .= 3 .* $A';
-  2.152 ms (9 allocations: 400 bytes)
+  1.459 ms (5 allocations: 288 bytes)
 
 julia> @btime $B .= $A .* exp.( -2 .* $A) .+ sin.( $A .* $A);
-  20.187 ms (0 allocations: 0 bytes)
+  22.493 ms (0 allocations: 0 bytes)
 
 julia> @btime @strided $B .= $A .* exp.( -2 .* $A) .+ sin.( $A .* $A);
-  28.625 ms (34 allocations: 1.20 KiB)
+  22.240 ms (10 allocations: 480 bytes)
 
 julia> A = randn(32,32,32,32);
 
 julia> B = similar(A);
 
 julia> @btime permutedims!($B, $A, (4,3,2,1));
-  5.461 ms (2 allocations: 128 bytes)
+  5.203 ms (2 allocations: 128 bytes)
 
 julia> @btime @strided permutedims!($B, $A, (4,3,2,1));
-  2.238 ms (4 allocations: 320 bytes)
+  2.201 ms (4 allocations: 320 bytes)
 
 julia> @btime $B .= permutedims($A, (1,2,3,4)) .+ permutedims($A, (2,3,4,1)) .+ permutedims($A, (3,4,1,2)) .+ permutedims($A, (4,1,2,3));
-  20.858 ms (32 allocations: 32.00 MiB)
+  21.863 ms (32 allocations: 32.00 MiB)
 
 julia> @btime @strided $B .= permutedims($A, (1,2,3,4)) .+ permutedims($A, (2,3,4,1)) .+ permutedims($A, (3,4,1,2)) .+ permutedims($A, (4,1,2,3));
-  9.221 ms (22 allocations: 1.25 KiB)
+  8.495 ms (9 allocations: 640 bytes)
 ```
 And now with `export JULIA_NUM_THREADS = 4`
 ```julia
@@ -76,42 +76,42 @@ julia> A = randn(4000,4000);
 julia> B = similar(A);
 
 julia> @btime $B .= ($A .+ $A') ./ 2;
-  142.887 ms (0 allocations: 0 bytes)
+  146.618 ms (0 allocations: 0 bytes)
 
 julia> @btime @strided $B .= ($A .+ $A') ./ 2;
-  28.741 ms (19 allocations: 1.13 KiB)
+  30.355 ms (12 allocations: 912 bytes)
 
 julia> A = randn(1000,1000);
 
 julia> B = similar(A);
 
 julia> @btime $B .= 3 .* $A';
-  1.621 ms (0 allocations: 0 bytes)
+  2.030 ms (0 allocations: 0 bytes)
 
 julia> @btime @strided $B .= 3 .* $A';
-  809.234 μs (15 allocations: 896 bytes)
+  808.874 μs (11 allocations: 784 bytes)
 
 julia> @btime $B .= $A .* exp.( -2 .* $A) .+ sin.( $A .* $A);
-  20.045 ms (0 allocations: 0 bytes)
+  21.971 ms (0 allocations: 0 bytes)
 
 julia> @btime @strided $B .= $A .* exp.( -2 .* $A) .+ sin.( $A .* $A);
-  7.937 ms (40 allocations: 1.78 KiB)
+  5.811 ms (16 allocations: 1.05 KiB)
 
 julia> A = randn(32,32,32,32);
 
 julia> B = similar(A);
 
 julia> @btime permutedims!($B, $A, (4,3,2,1));
-  4.788 ms (2 allocations: 128 bytes)
+  5.334 ms (2 allocations: 128 bytes)
 
 julia> @btime @strided permutedims!($B, $A, (4,3,2,1));
-  1.116 ms (10 allocations: 928 bytes)
+  1.192 ms (10 allocations: 928 bytes)
 
 julia> @btime $B .= permutedims($A, (1,2,3,4)) .+ permutedims($A, (2,3,4,1)) .+ permutedims($A, (3,4,1,2)) .+ permutedims($A, (4,1,2,3));
-  22.383 ms (32 allocations: 32.00 MiB)
+  22.465 ms (32 allocations: 32.00 MiB)
 
 julia> @btime @strided $B .= permutedims($A, (1,2,3,4)) .+ permutedims($A, (2,3,4,1)) .+ permutedims($A, (3,4,1,2)) .+ permutedims($A, (4,1,2,3));
-  3.087 ms (28 allocations: 2.08 KiB)
+  2.796 ms (15 allocations: 1.44 KiB)
 ```
 
 # Design principles
