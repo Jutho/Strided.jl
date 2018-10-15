@@ -90,8 +90,6 @@ function _mapreducedim_impl!(f::F, op::G, dims::NTuple{N,Int}, strides::NTuple{M
         mincosts = map(a->ifelse(iszero(a), 1, a << 1), minstrides)
         blocks = _computeblocks(dims, mincosts, strides)
 
-        # @show dims, strides, blocks, p
-        #
         if Threads.nthreads() == 1 || Threads.in_threaded_loop[] || prod(dims) < BLOCKSIZE
             _mapreduce_kernel!(f, op, dims, blocks, arrays, strides, offsets)
         else
@@ -99,8 +97,7 @@ function _mapreducedim_impl!(f::F, op::G, dims::NTuple{N,Int}, strides::NTuple{M
             # make cost of dimensions with zero stride in output array (reduction dimensions),
             # so that they are not divided in threading (which would lead to race errors)
 
-            n = Threads.nthreads()
-            threadblocks, threadoffsets = _computethreadblocks(n, dims, mincosts, strides, offsets)
+            threadblocks, threadoffsets = _computethreadblocks(dims, mincosts, strides, offsets)
             _mapreduce_threaded!(threadblocks, threadoffsets, f, op, blocks, arrays, strides)
         end
     end
@@ -223,32 +220,32 @@ function _computeblocks(dims::NTuple{N,Int}, costs::NTuple{N,Int}, strides::Tupl
     end
 end
 
-function _computethreadblocks end
-let factors = reverse!(simpleprimefactorization(Threads.nthreads()))
-    global _computethreadblocks
-    @inbounds function _computethreadblocks(n::Int, dims::NTuple{N,Int}, costs::NTuple{N,Int}, strides::NTuple{M,NTuple{N,Int}}, offsets::NTuple{M,Int}) where {N,M}
-        threadblocks = [dims]
-        threadoffsets = [offsets]
-        for k in factors
-            l = length(threadblocks)
-            for j = 1:l
-                dims = popfirst!(threadblocks)
-                offsets = popfirst!(threadoffsets)
-                i = _lastargmax((dims .- (k-1)) .* costs)
-                ndi = div(dims[i], k)
-                newdims = setindex(dims, ndi, i)
-                stridesi = getindex.(strides, i)
-                for m = 1:k-1
-                    push!(threadblocks, newdims)
-                    push!(threadoffsets, offsets)
-                    offsets = offsets .+ ndi .* stridesi
-                end
-                ndi = dims[i]-(k-1)*ndi
-                newdims = setindex(dims, ndi, i)
+const factors = Ref([1])
+function __init__()
+    factors[] = reverse!(simpleprimefactorization(Threads.nthreads()))
+end
+@inbounds function _computethreadblocks(dims::NTuple{N,Int}, costs::NTuple{N,Int}, strides::NTuple{M,NTuple{N,Int}}, offsets::NTuple{M,Int}) where {N,M}
+    threadblocks = [dims]
+    threadoffsets = [offsets]
+    for k in factors[]
+        l = length(threadblocks)
+        for j = 1:l
+            dims = popfirst!(threadblocks)
+            offsets = popfirst!(threadoffsets)
+            i = _lastargmax((dims .- (k-1)) .* costs)
+            ndi = div(dims[i], k)
+            newdims = setindex(dims, ndi, i)
+            stridesi = getindex.(strides, i)
+            for m = 1:k-1
                 push!(threadblocks, newdims)
                 push!(threadoffsets, offsets)
+                offsets = offsets .+ ndi .* stridesi
             end
+            ndi = dims[i]-(k-1)*ndi
+            newdims = setindex(dims, ndi, i)
+            push!(threadblocks, newdims)
+            push!(threadoffsets, offsets)
         end
-        return threadblocks, threadoffsets
     end
+    return threadblocks, threadoffsets
 end
