@@ -177,3 +177,13 @@ end
         end
     end
 end
+
+@testset "mapreduce" begin
+    @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
+        R1 = rand(T, (10, 10, 10, 10, 10, 10))
+        @test sum(R1; dims = (1, 3, 5)) ≈ @strided sum(R1; dims = (1, 3, 5))
+        @test mapreduce(sin, +, R1; dims = (1, 3, 5)) ≈ @strided mapreduce(sin, +, R1; dims = (1, 3, 5))
+        R2 = rand(T, (100, 100, 2))
+        @test sum(R2; dims = (1, 2)) ≈ @strided sum(R1; dims = (1, 2))
+    end
+end
