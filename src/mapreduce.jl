@@ -98,6 +98,7 @@ function _mapreducedim_impl!(f::F, op::G, dims::NTuple{N,Int}, strides::NTuple{M
             # so that they are not divided in threading (which would lead to race errors)
 
             threadblocks, threadoffsets = _computethreadblocks(dims, mincosts, strides, offsets)
+            # @show threadblocks, threadoffsets
             _mapreduce_threaded!(threadblocks, threadoffsets, f, op, blocks, arrays, strides)
         end
     end
@@ -235,6 +236,11 @@ end
             dims = popfirst!(threadblocks)
             offsets = popfirst!(threadoffsets)
             i = _lastargmax((dims .- (k-1)) .* costs)
+            if costs[i] == 0
+                push!(threadblocks, dims)
+                push!(threadoffsets, offsets)
+                return threadblocks, threadoffsets
+            end
             ndi = div(dims[i], k)
             newdims = setindex(dims, ndi, i)
             stridesi = getindex.(strides, i)
