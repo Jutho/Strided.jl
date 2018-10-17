@@ -184,6 +184,6 @@ end
         @test sum(R1; dims = (1, 3, 5)) ≈ @strided sum(R1; dims = (1, 3, 5))
         @test mapreduce(sin, +, R1; dims = (1, 3, 5)) ≈ @strided mapreduce(sin, +, R1; dims = (1, 3, 5))
         R2 = rand(T, (100, 100, 2))
-        @test sum(R2; dims = (1, 2)) ≈ @strided sum(R1; dims = (1, 2))
+        @test sum(R2; dims = (1, 2)) ≈ @strided sum(R2; dims = (1, 2))
     end
 end
