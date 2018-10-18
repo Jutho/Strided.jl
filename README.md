@@ -181,10 +181,13 @@ this is on the TODO list. Some BLAS methods (`axpy!`, `axpby!`, scalar multiplic
 `mul!`, `rmul!` or `lmul!`) are however overloaded by relying on the optimized yet generic
 `map!` implementation.
 
-Vice versa, `StridedView`s can currently only be created from `DenseArray` (typically just `Array`
-in Julia Base). While other `StridedArray`s, e.g. strided `SubArray`s or `ReshapedArray`s, could
-in principle be converted to `StridedView`, this is currently not supported. It is better to first
-wrap the parent array in a `StridedView` and only then apply slicing, reshaping and permuting dimension.
+`StridedView`s can currently only be created with certainty from `DenseArray` (typically just
+`Array` in Julia Base). For `Base.SubArray` or `Base.ReshapedArray` instances, the `StridedView`
+constructor will first act on the underlying parent array, and then try to mimic the corresponding
+view or reshape operation using `sview` and `sreshape`. These, however, are more limited then
+their Base counterparts (because they need to guarantee that the result still has a strided
+memory layout with respect to the new dimensions), so an error can result. `Base.ReinterpretArray`
+is currently not supported.
 
 Note again that, unlike `StridedArray`s, `StridedView`s behave lazily (i.e. still produce a view
 on the same parent array) under `permutedims` and regular indexing with ranges.

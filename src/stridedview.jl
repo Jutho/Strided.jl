@@ -12,6 +12,9 @@ StridedView(a::DenseArray) = StridedView(a, size(a), strides(a))
 StridedView(a::Adjoint{<:Any, <:DenseArray}) = StridedView(a')'
 StridedView(a::Transpose{<:Any, <:DenseArray}) = transpose(StridedView(transpose(a)))
 
+StridedView(a::Base.SubArray) = sview(StridedView(a.parent), a.indices...)
+StridedView(a::Base.ReshapedArray) = sreshape(StridedView(a.parent), a.dims)
+
 # Methods for StridedView
 Base.size(a::StridedView) = a.size
 Base.strides(a::StridedView) = a.strides

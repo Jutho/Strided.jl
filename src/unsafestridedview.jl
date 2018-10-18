@@ -12,6 +12,9 @@ UnsafeStridedView(a::StridedArray) = UnsafeStridedView(pointer(a), size(a), stri
 UnsafeStridedView(a::Adjoint{<:Any, <:StridedArray}) = UnsafeStridedView(a')'
 UnsafeStridedView(a::Transpose{<:Any, <:StridedArray}) = transpose(UnsafeStridedView(transpose(a)))
 
+UnsafeStridedView(a::Base.SubArray) = sview(UnsafeStridedView(a.parent), a.indices...)
+UnsafeStridedView(a::Base.ReshapedArray) = sreshape(UnsafeStridedView(a.parent), a.dims)
+
 # Methods for UnsafeStridedView
 Base.size(a::UnsafeStridedView) = a.size
 Base.strides(a::UnsafeStridedView) = a.strides
