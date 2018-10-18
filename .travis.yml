@@ -18,6 +18,11 @@ matrix:
  allow_failures:
  - julia: nightly
 
+env:
+  matrix:
+    - JULIA_NUM_THREADS=1
+    - JULIA_NUM_THREADS=4
+
 ## uncomment and modify the following lines to manually install system packages
 #addons:
 #  apt: # apt-get for linux
