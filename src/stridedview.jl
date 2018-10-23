@@ -9,9 +9,9 @@ end
 
 StridedView(a::A, size::NTuple{N,Int}, strides::NTuple{N,Int}, offset::Int = 0) where {T,N,A<:DenseArray{T}} = StridedView{T,N,A,FN}(a, size, strides, offset, identity)
 StridedView(a::DenseArray) = StridedView(a, size(a), strides(a))
-StridedView(a::Adjoint{<:Any, <:DenseArray}) = StridedView(a')'
-StridedView(a::Transpose{<:Any, <:DenseArray}) = transpose(StridedView(transpose(a)))
 
+StridedView(a::Adjoint) = StridedView(a')'
+StridedView(a::Transpose) = transpose(StridedView(transpose(a)))
 StridedView(a::Base.SubArray) = sview(StridedView(a.parent), a.indices...)
 StridedView(a::Base.ReshapedArray) = sreshape(StridedView(a.parent), a.dims)
 

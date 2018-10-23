@@ -150,23 +150,94 @@ end
             $(Expr(:block, [:($(Ivars[j]) -=  $(blockdimvars[i]) * $(stridevars[i,j])) for j = 1:M]...))
         end
     end
-    for i2 = 1:N
-        ex = quote
-            for $(blockloopvars[i2]) = 1:blocks[$i2]:dims[$i2]
-                $(blockdimvars[i2]) = min(blocks[$i2], dims[$i2]-$(blockloopvars[i2])+1)
-                $ex
-                $(Expr(:block, [:($(Ivars[j]) +=  $(blockdimvars[i2]) * $(stridevars[i2,j])) for j = 1:M]...))
+
+    initalization_required = false
+    initvar = gensym(:init)
+    if initalization_required
+        initex = :(A1[ParentIndex($(Ivars[1]))] = initop(A1[ParentIndex($(Ivars[1]))]))
+        i = 1
+        if N >= 1
+            initex = quote
+                if $(stridevars[i,1]) == 0
+                    $initex
+                else
+                    $(innerloopvars[i]) = 0
+                    while $(innerloopvars[i]) < $(blockdimvars[i])
+                        $initex
+                        $(Ivars[1]) += $(stridevars[i,1])
+                        $(innerloopvars[i]) += 1
+                        $(Expr(:simdloop, true))  # Mark loop as SIMD loop
+                    end
+                    $(Ivars[1]) -=  $(blockdimvars[i]) * $(stridevars[i,1])
+                end
             end
-            $(Expr(:block, [:($(Ivars[j]) -=  dims[$i2] * $(stridevars[i2,j])) for j = 1:M]...))
+        end
+        for i = 2:N
+            initex = quote
+                if $(stridevars[i,1]) == 0
+                    $initex
+                else
+                    $(innerloopvars[i]) = 0
+                    while $(innerloopvars[i]) < $(blockdimvars[i])
+                        $initex
+                        $(Ivars[1]) += $(stridevars[i,1])
+                        $(innerloopvars[i]) += 1
+                    end
+                    $(Ivars[1]) -=  $(blockdimvars[i]) * $(stridevars[i,1])
+                end
+            end
+        end
+        ex = quote
+            if $initvar
+                $initex
+            end
+            $ex
         end
     end
-    quote
-        $pre1
-        $pre2
-        $pre3
-        @inbounds $ex
-        return A1
+
+    if initalization_required
+        for i2 = 1:N
+            ex = quote
+                for $(blockloopvars[i2]) = 1:blocks[$i2]:dims[$i2]
+                    $(blockdimvars[i2]) = min(blocks[$i2], dims[$i2]-$(blockloopvars[i2])+1)
+                    $ex
+                    $(Expr(:block, [:($(Ivars[j]) +=  $(blockdimvars[i2]) * $(stridevars[i2,j])) for j = 1:M]...))
+                    if $(stridevars[i2,1]) == 0
+                        $initvar = false
+                    end
+                end
+                $(Expr(:block, [:($(Ivars[j]) -=  dims[$i2] * $(stridevars[i2,j])) for j = 1:M]...))
+                $initvar = true
+            end
+        end
+        ex = quote
+            $pre1
+            $pre2
+            $pre3
+            $initvar = true
+            @inbounds $ex
+            return A1
+        end
+    else
+        for i2 = 1:N
+            ex = quote
+                for $(blockloopvars[i2]) = 1:blocks[$i2]:dims[$i2]
+                    $(blockdimvars[i2]) = min(blocks[$i2], dims[$i2]-$(blockloopvars[i2])+1)
+                    $ex
+                    $(Expr(:block, [:($(Ivars[j]) +=  $(blockdimvars[i2]) * $(stridevars[i2,j])) for j = 1:M]...))
+                end
+                $(Expr(:block, [:($(Ivars[j]) -=  dims[$i2] * $(stridevars[i2,j])) for j = 1:M]...))
+            end
+        end
+        ex = quote
+            $pre1
+            $pre2
+            $pre3
+            @inbounds $ex
+            return A1
+        end
     end
+    return ex
 end
 
 function indexorder(strides::NTuple{N,Int}) where {N}

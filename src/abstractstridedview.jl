@@ -44,7 +44,7 @@ LinearAlgebra.mul!(dst::AbstractStridedView{<:Number,N}, src::AbstractStridedVie
 LinearAlgebra.axpy!(a::Number, X::AbstractStridedView{<:Number,N}, Y::AbstractStridedView{<:Number,N}) where {N} =
     a == 1 ? map!(+, Y, X, Y) : map!((x,y)->(a*x+y), Y, X, Y)
 LinearAlgebra.axpby!(a::Number, X::AbstractStridedView{<:Number,N}, b::Number, Y::AbstractStridedView{<:Number,N}) where {N} =
-    b == 1 ? axpy!(a, X, Y) : map!((x,y)->(a*x+b*y), Y, X, Y)
+    b == 1 ? axpy!(a, X, Y) : (b == 0 ? mul!(Y, a, X) : map!((x,y)->(a*x+b*y), Y, X, Y))
 
 function LinearAlgebra.mul!(C::AbstractStridedView{<:Any,2}, A::AbstractStridedView{<:Any,2}, B::AbstractStridedView{<:Any,2})
     if C.op == conj
@@ -182,7 +182,7 @@ function _computereshapestrides(newsize::Tuple{}, oldsize::Dims{N}, strides::Dim
     return ()
 end
 function _computereshapestrides(newsize::Dims, oldsize::Tuple{}, strides::Tuple{})
-    all(isequal(1), newsize)
+    all(isequal(1), newsize) || throw(DimensionMismatch())
     return map(n->1, newsize)
 end
 function _computereshapestrides(newsize::Dims{1}, oldsize::Dims{1}, strides::Dims{1})

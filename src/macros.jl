@@ -25,6 +25,8 @@ _strided(ex) = ex
 
 maybestrided(A::AbstractStridedView) = A
 maybestrided(A::DenseArray) = StridedView(A)
+maybestrided(A::Base.StridedReshapedArray) = StridedView(A)
+maybestrided(A::Base.StridedSubArray) = StridedView(A)
 maybestrided(A::Adjoint{<:Any, <:DenseArray}) = StridedView(A)
 maybestrided(A::Transpose{<:Any, <:DenseArray}) = StridedView(A)
 maybestrided(A) = A

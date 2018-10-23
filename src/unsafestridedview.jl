@@ -8,10 +8,10 @@ struct UnsafeStridedView{T,N,F<:Union{FN,FC,FA,FT}} <: AbstractStridedView{T,N,F
 end
 
 UnsafeStridedView(a::Ptr{T}, size::NTuple{N,Int}, strides::NTuple{N,Int}, offset::Int = 0) where {T,N} = UnsafeStridedView{T,N,FN}(a, size, strides, offset, identity)
-UnsafeStridedView(a::StridedArray) = UnsafeStridedView(pointer(a), size(a), strides(a))
+UnsafeStridedView(a::DenseArray) = UnsafeStridedView(pointer(a), size(a), strides(a))
+
 UnsafeStridedView(a::Adjoint{<:Any, <:StridedArray}) = UnsafeStridedView(a')'
 UnsafeStridedView(a::Transpose{<:Any, <:StridedArray}) = transpose(UnsafeStridedView(transpose(a)))
-
 UnsafeStridedView(a::Base.SubArray) = sview(UnsafeStridedView(a.parent), a.indices...)
 UnsafeStridedView(a::Base.ReshapedArray) = sreshape(UnsafeStridedView(a.parent), a.dims)
 
@@ -74,7 +74,7 @@ function LinearAlgebra.adjoint(a::UnsafeStridedView{<:Any,2}) # act recursively,
     end
 end
 
-function sreshape(a::UnsafeStridedView, newsize::Dims)
+@inline function sreshape(a::UnsafeStridedView, newsize::Dims)
     if any(isequal(0), newsize)
         any(isequal(0), size(a)) || throw(DimensionMismatch())
         newstrides = _defaultstrides(newsize)
