@@ -9,6 +9,7 @@ end
 
 StridedView(a::A, size::NTuple{N,Int}, strides::NTuple{N,Int}, offset::Int = 0) where {T,N,A<:DenseArray{T}} = StridedView{T,N,A,FN}(a, size, strides, offset, identity)
 StridedView(a::DenseArray) = StridedView(a, size(a), strides(a))
+StridedView(a::StridedView) = a
 
 StridedView(a::Adjoint) = StridedView(a')'
 StridedView(a::Transpose) = transpose(StridedView(transpose(a)))

@@ -26,7 +26,8 @@ Base.dotview(a::AbstractStridedView{<:Any,N}, I::Vararg{Union{RangeIndex,Colon},
     # promote AbstractStridedView to have same size, by giving artificial zero strides
     stridedargs = promoteshape(size(dest), capturestridedargs(bc)...)
     c = make_capture(bc)
-    return map!(c, dest, stridedargs...)
+    _mapreducedim1!(c, nothing, nothing, size(dest), (dest, stridedargs...))
+    return dest
 end
 
 const WrappedScalarArgs = Union{AbstractArray{<:Any,0}, Ref{<:Any}}
@@ -46,7 +47,7 @@ function promoteshape1(sz::Dims{N}, a::StridedView) where {N}
         elseif size(a, d) == 1
             0
         else
-            throw(DimensionMismatch("array could not be broadcast to match destination"))
+            throw(DimensionMismatch("array could not be broadcasted to match destination"))
         end
     end
     return StridedView(a.parent, sz, newstrides, a.offset, a.op)
