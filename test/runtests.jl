@@ -4,86 +4,42 @@ using Random
 using Strided
 using Strided: StridedView, UnsafeStridedView
 
-@testset "multiplication with $SV" for SV in (StridedView, UnsafeStridedView)
+@testset "construction of $SV" for SV in (StridedView, UnsafeStridedView)
     @testset for T1 in (Float32, Float64, Complex{Float32}, Complex{Float64})
-        d = 20
-        A1 = rand(T1, (d,d))
-        A1c = copy(A1)
-        B1 = SV(A1c)
+        A1 = randn(T1, (60,60))
+        B1 = SV(A1)
         for op1 in (identity, conj, transpose, adjoint)
             @test op1(A1) == op1(B1)
         end
-        for T2 in (Float32, Float64, Complex{Float32}, Complex{Float64})
-            A2 = rand(T2, (d,d))
-            T3 = promote_type(T1,T2)
-            A3 = rand(T3, (d,d))
-            A2c = copy(A2)
-            A3c = copy(A3)
-            GC.@preserve A1c A2c A3c begin
-                B2 = SV(A2c)
-                B3 = SV(A3c)
 
-                for op1 in (identity, conj, transpose, adjoint)
-                    for op2 in (identity, conj, transpose, adjoint)
-                        @test op1(A1)*op2(A2) ≈ op1(B1)*op2(B2)
-                        for op3 in (identity, conj, transpose, adjoint)
-                            mul!(op3(B3), op1(B1), op2(B2))
-                            @test B3 ≈ op3(op1(A1)*op2(A2)) # op3 is its own inverse
-                        end
-                    end
-                end
-            end
+        A2 = view(A1, 1:36, 1:20)
+        B2 = SV(A2)
+        for op1 in (identity, conj, transpose, adjoint)
+            @test op1(A2) == op1(B2)
         end
-    end
 
-    let T = Complex{Int}
-        d = 10
-        A1 = map(complex, rand(-100:100, (d,d)), rand(-100:100, (d,d)))
-        A2 = map(complex, rand(-100:100, (d,d)), rand(-100:100, (d,d)))
-        A3 = map(complex, rand(-100:100, (d,d)), rand(-100:100, (d,d)))
-        A1c = copy(A1)
-        A2c = copy(A2)
-        A3c = copy(A3)
-        GC.@preserve A1c A2c A3c begin
-            B1 = SV(A1c)
-            B2 = SV(A2c)
-            B3 = SV(A3c)
-
-            for op1 in (identity, conj, transpose, adjoint)
-                @test op1(A1) == op1(B1)
-                for op2 in (identity, conj, transpose, adjoint)
-                    @test op1(A1)*op2(A2) ≈ op1(B1)*op2(B2)
-                    for op3 in (identity, conj, transpose, adjoint)
-                        Strided.mul!(op3(B3), op1(B1), op2(B2))
-                        @test B3 ≈ op3(op1(A1)*op2(A2)) # op3 is its own inverse
-                    end
-                end
-            end
+        A3 = reshape(A1, 360, 10)
+        B3 = SV(A3)
+        for op1 in (identity, conj, transpose, adjoint)
+            @test op1(A3) == op1(B3)
         end
-    end
 
-    let T = Rational{Int}
-        d = 10
-        A1 = map(//, rand(-10:10, (d,d)), rand(1:10, (d,d)))
-        A2 = map(//, rand(-10:10, (d,d)), rand(1:10, (d,d)))
-        A3 = map(//, rand(-10:10, (d,d)), rand(1:10, (d,d)))
-        A1c = copy(A1)
-        A2c = copy(A2)
-        A3c = copy(A3)
-        GC.@preserve A1c A2c A3c begin
-            B1 = SV(A1c)
-            B2 = SV(A2c)
-            B3 = SV(A3c)
+        A4 = reshape(view(A1, 1:36, 1:20), (6,6,5,4))
+        B4 = SV(A4)
+        for op1 in (identity, conj)
+            @test op1(A4) == op1(B4)
+        end
 
+        A5 = reshape(view(A1, 1:36, 1:20), (6,120))
+        @test_throws Strided.ReshapeException SV(A5)
+
+        A6 = [randn(T1, (5,5)) for i=1:5, j=1:5]
+        if SV == UnsafeStridedView
+            @test_throws AssertionError SV(A6)
+        else
+            B6 = SV(A6)
             for op1 in (identity, conj, transpose, adjoint)
-                @test op1(A1) == op1(B1)
-                for op2 in (identity, conj, transpose, adjoint)
-                    @test op1(A1)*op2(A2) ≈ op1(B1)*op2(B2)
-                    for op3 in (identity, conj, transpose, adjoint)
-                        mul!(op3(B3), op1(B1), op2(B2))
-                        @test B3 ≈ op3(op1(A1)*op2(A2)) # op3 is its own inverse
-                    end
-                end
+                @test op1(A6) == op1(B6)
             end
         end
     end
@@ -185,5 +141,90 @@ end
         @test mapreduce(sin, +, R1; dims = (1, 3, 5)) ≈ @strided mapreduce(sin, +, R1; dims = (1, 3, 5))
         R2 = rand(T, (100, 100, 2))
         @test sum(R2; dims = (1, 2)) ≈ @strided sum(R2; dims = (1, 2))
+    end
+end
+
+@testset "multiplication with $SV" for SV in (StridedView, UnsafeStridedView)
+    @testset for T1 in (Float32, Float64, Complex{Float32}, Complex{Float64})
+        d = 20
+        A1 = rand(T1, (d,d))
+        A1c = copy(A1)
+        B1 = SV(A1c)
+        for op1 in (identity, conj, transpose, adjoint)
+            @test op1(A1) == op1(B1)
+        end
+        for T2 in (Float32, Float64, Complex{Float32}, Complex{Float64})
+            A2 = rand(T2, (d,d))
+            T3 = promote_type(T1,T2)
+            A3 = rand(T3, (d,d))
+            A2c = copy(A2)
+            A3c = copy(A3)
+            GC.@preserve A1c A2c A3c begin
+                B2 = SV(A2c)
+                B3 = SV(A3c)
+
+                for op1 in (identity, conj, transpose, adjoint)
+                    for op2 in (identity, conj, transpose, adjoint)
+                        @test op1(A1)*op2(A2) ≈ op1(B1)*op2(B2)
+                        for op3 in (identity, conj, transpose, adjoint)
+                            mul!(op3(B3), op1(B1), op2(B2))
+                            @test B3 ≈ op3(op1(A1)*op2(A2)) # op3 is its own inverse
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    let T = Complex{Int}
+        d = 10
+        A1 = map(complex, rand(-100:100, (d,d)), rand(-100:100, (d,d)))
+        A2 = map(complex, rand(-100:100, (d,d)), rand(-100:100, (d,d)))
+        A3 = map(complex, rand(-100:100, (d,d)), rand(-100:100, (d,d)))
+        A1c = copy(A1)
+        A2c = copy(A2)
+        A3c = copy(A3)
+        GC.@preserve A1c A2c A3c begin
+            B1 = SV(A1c)
+            B2 = SV(A2c)
+            B3 = SV(A3c)
+
+            for op1 in (identity, conj, transpose, adjoint)
+                @test op1(A1) == op1(B1)
+                for op2 in (identity, conj, transpose, adjoint)
+                    @test op1(A1)*op2(A2) ≈ op1(B1)*op2(B2)
+                    for op3 in (identity, conj, transpose, adjoint)
+                        Strided.mul!(op3(B3), op1(B1), op2(B2))
+                        @test B3 ≈ op3(op1(A1)*op2(A2)) # op3 is its own inverse
+                    end
+                end
+            end
+        end
+    end
+
+    let T = Rational{Int}
+        d = 10
+        A1 = map(//, rand(-10:10, (d,d)), rand(1:10, (d,d)))
+        A2 = map(//, rand(-10:10, (d,d)), rand(1:10, (d,d)))
+        A3 = map(//, rand(-10:10, (d,d)), rand(1:10, (d,d)))
+        A1c = copy(A1)
+        A2c = copy(A2)
+        A3c = copy(A3)
+        GC.@preserve A1c A2c A3c begin
+            B1 = SV(A1c)
+            B2 = SV(A2c)
+            B3 = SV(A3c)
+
+            for op1 in (identity, conj, transpose, adjoint)
+                @test op1(A1) == op1(B1)
+                for op2 in (identity, conj, transpose, adjoint)
+                    @test op1(A1)*op2(A2) ≈ op1(B1)*op2(B2)
+                    for op3 in (identity, conj, transpose, adjoint)
+                        mul!(op3(B3), op1(B1), op2(B2))
+                        @test B3 ≈ op3(op1(A1)*op2(A2)) # op3 is its own inverse
+                    end
+                end
+            end
+        end
     end
 end

@@ -1,11 +1,18 @@
 # StridedView
-struct StridedView{T,N,A<:DenseArray{T},F<:Union{FN,FC,FA,FT}} <: AbstractStridedView{T,N,F}
+struct StridedView{T,N,A<:DenseArray,F<:Union{FN,FC,FA,FT}} <: AbstractStridedView{T,N,F}
     parent::A
     size::NTuple{N,Int}
     strides::NTuple{N,Int}
     offset::Int
     op::F
 end
+function StridedView(parent::A, size::NTuple{N,Int}, strides::NTuple{N,Int}, offset::Int,
+    op::F) where {A<:DenseArray, N, F}
+
+    T = Base.promote_op(op, eltype(parent))
+    StridedView{T,N,A,F}(parent, size, strides, offset, op)
+end
+
 
 StridedView(a::A, size::NTuple{N,Int}, strides::NTuple{N,Int}, offset::Int = 0) where {T,N,A<:DenseArray{T}} = StridedView{T,N,A,FN}(a, size, strides, offset, identity)
 StridedView(a::DenseArray) = StridedView(a, size(a), strides(a))
@@ -62,17 +69,28 @@ Base.conj(a::StridedView) = StridedView(a.parent, a.size, a.strides, a.offset, _
     return StridedView(a.parent, newsize, newstrides, a.offset, a.op)
 end
 
-LinearAlgebra.transpose(a::StridedView{<:Any,2}) = permutedims(a, (2,1))
+LinearAlgebra.transpose(a::StridedView{<:Number,2}) = permutedims(a, (2,1))
 LinearAlgebra.adjoint(a::StridedView{<:Number,2}) = permutedims(conj(a), (2,1))
 function LinearAlgebra.adjoint(a::StridedView{<:Any,2}) # act recursively, like Base
-    if isa(a.f, FN)
+    if isa(a.op, FN)
         return permutedims(StridedView(a.parent, a.size, a.strides, a.offset, adjoint), (2,1))
-    elseif isa(a.f, FC)
+    elseif isa(a.op, FC)
         return permutedims(StridedView(a.parent, a.size, a.strides, a.offset, transpose), (2,1))
-    elseif isa(a.f, FA)
+    elseif isa(a.op, FA)
         return permutedims(StridedView(a.parent, a.size, a.strides, a.offset, identity), (2,1))
     else
         return permutedims(StridedView(a.parent, a.size, a.strides, a.offset, conj), (2,1))
+    end
+end
+function LinearAlgebra.transpose(a::StridedView{<:Any,2}) # act recursively, like Base
+    if isa(a.op, FN)
+        return permutedims(StridedView(a.parent, a.size, a.strides, a.offset, transpose), (2,1))
+    elseif isa(a.op, FC)
+        return permutedims(StridedView(a.parent, a.size, a.strides, a.offset, adjoint), (2,1))
+    elseif isa(a.op, FA)
+        return permutedims(StridedView(a.parent, a.size, a.strides, a.offset, conj), (2,1))
+    else
+        return permutedims(StridedView(a.parent, a.size, a.strides, a.offset, identity), (2,1))
     end
 end
 

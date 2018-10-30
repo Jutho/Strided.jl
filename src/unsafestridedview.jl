@@ -1,13 +1,21 @@
 # UnsafeStridedView
-struct UnsafeStridedView{T,N,F<:Union{FN,FC,FA,FT}} <: AbstractStridedView{T,N,F}
-    ptr::Ptr{T}
+struct UnsafeStridedView{T,N,PT,F<:Union{FN,FC,FA,FT}} <: AbstractStridedView{T,N,F}
+    ptr::Ptr{PT}
     size::NTuple{N,Int}
     strides::NTuple{N,Int}
     offset::Int
     op::F
 end
+function UnsafeStridedView(a::Ptr{PT}, size::NTuple{N,Int}, strides::NTuple{N,Int},
+    offset::Int, op::F) where {PT,N,F}
 
-UnsafeStridedView(a::Ptr{T}, size::NTuple{N,Int}, strides::NTuple{N,Int}, offset::Int = 0) where {T,N} = UnsafeStridedView{T,N,FN}(a, size, strides, offset, identity)
+    @assert isbitstype(PT)
+    T = Base.promote_op(op, PT)
+    UnsafeStridedView{T,N,PT,F}(a, size, strides, offset, op)
+end
+
+UnsafeStridedView(a::Ptr{T}, size::NTuple{N,Int}, strides::NTuple{N,Int}, offset::Int = 0) where {T,N} =
+    UnsafeStridedView(a, size, strides, offset, identity)
 UnsafeStridedView(a::DenseArray) = UnsafeStridedView(pointer(a), size(a), strides(a))
 UnsafeStridedView(a::StridedView) = UnsafeStridedView(pointer(a), size(a), strides(a))
 
@@ -61,17 +69,28 @@ function Base.permutedims(a::UnsafeStridedView{<:Any,N}, p) where {N}
     return UnsafeStridedView(a.ptr, newsize, newstrides, a.offset, a.op)
 end
 
-LinearAlgebra.transpose(a::UnsafeStridedView{<:Any,2}) = permutedims(a, (2,1))
+LinearAlgebra.transpose(a::UnsafeStridedView{<:Number,2}) = permutedims(a, (2,1))
 LinearAlgebra.adjoint(a::UnsafeStridedView{<:Number,2}) = permutedims(conj(a), (2,1))
 function LinearAlgebra.adjoint(a::UnsafeStridedView{<:Any,2}) # act recursively, like Base
-    if isa(a.f, FN)
+    if isa(a.op, FN)
         return permutedims(UnsafeStridedView(a.ptr, a.size, a.strides, a.offset, adjoint), (2,1))
-    elseif isa(a.f, FC)
+    elseif isa(a.op, FC)
         return permutedims(UnsafeStridedView(a.ptr, a.size, a.strides, a.offset, transpose), (2,1))
-    elseif isa(a.f, FA)
+    elseif isa(a.op, FA)
         return permutedims(UnsafeStridedView(a.ptr, a.size, a.strides, a.offset, identity), (2,1))
     else
         return permutedims(UnsafeStridedView(a.ptr, a.size, a.strides, a.offset, conj), (2,1))
+    end
+end
+function LinearAlgebra.transpose(a::UnsafeStridedView{<:Any,2}) # act recursively, like Base
+    if isa(a.op, FN)
+        return permutedims(UnsafeStridedView(a.ptr, a.size, a.strides, a.offset, transpose), (2,1))
+    elseif isa(a.op, FC)
+        return permutedims(UnsafeStridedView(a.ptr, a.size, a.strides, a.offset, adjoint), (2,1))
+    elseif isa(a.op, FA)
+        return permutedims(UnsafeStridedView(a.ptr, a.size, a.strides, a.offset, conj), (2,1))
+    else
+        return permutedims(UnsafeStridedView(a.ptr, a.size, a.strides, a.offset, identity), (2,1))
     end
 end
 
