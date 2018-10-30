@@ -119,6 +119,7 @@ end
     blockloopvars = [Symbol("J$i") for i = 1:N]
     blockdimvars = [Symbol("d$i") for i = 1:N]
     innerloopvars = [Symbol("j$i") for i = 1:N]
+    initblockdimvars = [Symbol("d′$i") for i = 1:N]
 
     stridevars = [Symbol("stride_$(i)_$(j)") for i = 1:N, j = 1:M]
     Ivars = [Symbol("I$j") for j = 1:M]
@@ -155,43 +156,37 @@ end
         end
     end
 
-    initvar = gensym(:init)
+    initvars = [Symbol("init$i") for i = 1:N+1]
     if F3 !== Nothing
         initex = :(A1[ParentIndex($(Ivars[1]))] = initop(A1[ParentIndex($(Ivars[1]))]))
         i = 1
         if N >= 1
             initex = quote
-                if $(stridevars[i,1]) == 0
+                $(innerloopvars[i]) = 0
+                $(initblockdimvars[i]) = $(stridevars[i,1]) == 0 ? 1 : $(blockdimvars[i])
+                while $(innerloopvars[i]) < $(initblockdimvars[i])
                     $initex
-                else
-                    $(innerloopvars[i]) = 0
-                    while $(innerloopvars[i]) < $(blockdimvars[i])
-                        $initex
-                        $(Ivars[1]) += $(stridevars[i,1])
-                        $(innerloopvars[i]) += 1
-                        $(Expr(:simdloop, true))  # Mark loop as SIMD loop
-                    end
-                    $(Ivars[1]) -=  $(blockdimvars[i]) * $(stridevars[i,1])
+                    $(Ivars[1]) += $(stridevars[i,1])
+                    $(innerloopvars[i]) += 1
+                    $(Expr(:simdloop, true))  # Mark loop as SIMD loop
                 end
+                $(Ivars[1]) -=  $(initblockdimvars[i]) * $(stridevars[i,1])
             end
         end
         for outer i = 2:N
             initex = quote
-                if $(stridevars[i,1]) == 0
+                $(innerloopvars[i]) = 0
+                $(initblockdimvars[i]) = $(stridevars[i,1]) == 0 ? 1 : $(blockdimvars[i])
+                while $(innerloopvars[i]) < $(initblockdimvars[i])
                     $initex
-                else
-                    $(innerloopvars[i]) = 0
-                    while $(innerloopvars[i]) < $(blockdimvars[i])
-                        $initex
-                        $(Ivars[1]) += $(stridevars[i,1])
-                        $(innerloopvars[i]) += 1
-                    end
-                    $(Ivars[1]) -=  $(blockdimvars[i]) * $(stridevars[i,1])
+                    $(Ivars[1]) += $(stridevars[i,1])
+                    $(innerloopvars[i]) += 1
                 end
+                $(Ivars[1]) -=  $(initblockdimvars[i]) * $(stridevars[i,1])
             end
         end
         ex = quote
-            if $initvar
+            if $(initvars[1])
                 $initex
             end
             $ex
@@ -219,23 +214,21 @@ end
     else
         for outer i = 1:N
             ex = quote
+                $(initvars[i]) = $(initvars[i+1])
                 for $(blockloopvars[i]) = 1:blocks[$i]:dims[$i]
                     $(blockdimvars[i]) = min(blocks[$i], dims[$i]-$(blockloopvars[i])+1)
                     $ex
+                    $(initvars[i]) &= $(stridevars[i,1]) > 0
                     $(Expr(:block, [:($(Ivars[j]) +=  $(blockdimvars[i]) * $(stridevars[i,j])) for j = 1:M]...))
-                    if $(stridevars[i,1]) == 0
-                        $initvar = false
-                    end
                 end
                 $(Expr(:block, [:($(Ivars[j]) -=  dims[$i] * $(stridevars[i,j])) for j = 1:M]...))
-                $initvar = true
             end
         end
         ex = quote
             $pre1
             $pre2
             $pre3
-            $initvar = true
+            $(initvars[N+1]) = true
             @inbounds $ex
             return A1
         end

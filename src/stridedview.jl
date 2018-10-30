@@ -58,7 +58,7 @@ Base.conj(a::StridedView) = StridedView(a.parent, a.size, a.strides, a.offset, _
 @inline function Base.permutedims(a::StridedView{<:Any,N}, p) where {N}
     (length(p) == N && TupleTools.isperm(p)) || throw(ArgumentError("Invalid permutation of length $N: $p"))
     newsize = TupleTools._permute(a.size, p)
-    newstrides = TupleTools._permute(a.strides, p)
+    newstrides = _simplifypermutestrides(TupleTools._permute(a.strides, p), newsize)
     return StridedView(a.parent, newsize, newstrides, a.offset, a.op)
 end
 

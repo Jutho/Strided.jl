@@ -135,6 +135,8 @@ Base.show(io::IO, e::ReshapeException) = print(io, "Cannot produce a reshaped St
 @inline sview(a::AbstractStridedView{<:Any,N}, I::Vararg{Union{RangeIndex,Colon},N}) where {N} = getindex(a, I...)
 @inline sview(a::AbstractStridedView, I::Union{RangeIndex,Colon}) = getindex(sreshape(a, (length(a),)), I...)
 
+@inline view(a::AbstractStridedView{<:Any,N}, I::Vararg{Union{RangeIndex,Colon},N}) where {N} = getindex(a, I...)
+
 @inline sview(a::DenseArray{<:Any,N}, I::Vararg{Union{RangeIndex,Colon},N}) where {N} = getindex(StridedView(a), I...)
 @inline sview(a::DenseArray, I::Union{RangeIndex,Colon}) = getindex(sreshape(StridedView(a), (length(a),)), I...)
 
@@ -255,3 +257,15 @@ let
         return mranges, nranges
     end
 end
+
+function _simplifypermutestrides(strides::Dims{N}, size::Dims{N}) where {N}
+    if size[2] == 1
+        news2 = max(strides[1]*size[1], strides[2])
+        newtail = (news2, TupleTools.tail2(strides)...)
+        return (strides[1], _simplifypermutestrides(newtail, Base.tail(size))...)
+    else
+        return (strides[1], _simplifypermutestrides(Base.tail(strides), Base.tail(size))...)
+    end
+end
+_simplifypermutestrides(strides::Dims{1}, size::Dims{1}) = strides
+_simplifypermutestrides(strides::Dims{0}, size::Dims{0}) = strides
