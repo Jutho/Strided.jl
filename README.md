@@ -138,7 +138,7 @@ Furthermore, the strided structure can be retained under certain `reshape` opera
 all of them. Any dimension can always be split into smaller dimensions, but two subsequent
 dimensions `i` and `i+1` can only be joined if `stride(A,i+1) == size(A,i)*stride(A,i)`. Instead
 of overloading `reshape`, Strided.jl provides a separate function `sreshape` which returns a
-`StridedView` over the same parent data, or throws an error if this is impossible.
+`StridedView` over the same parent data, or throws a runtime error if this is impossible.
 
 ## Broadcasting and `map(reduce)`
 
@@ -152,12 +152,15 @@ involved have strides which are not monotonously increasing, e.g. if `transpose`
 `permutedims` has been applied. The fact that the latter also acts lazily (whereas it creates
 a copy of the data in Julia base) can potentially provide a further speedup.
 
-Furthermore, these optimized methods are implemented with support for multithreading. Thus if `Threads.nthreads() > 1` and the arrays involved are sufficiently large, performance can be
-boosted even for plain arrays with a strictly sequential memory layout.
+Furthermore, these optimized methods are implemented with support for multithreading. Thus,
+if `Threads.nthreads() > 1` and the arrays involved are sufficiently large, performance can be
+boosted even for plain arrays with a strictly sequential memory layout, provided that the
+broadcast operation is compute bound and not memory bound (i.e. the broadcast function is
+sufficienlty complex).
 
 ## The `@strided` macro annotation
 Rather than manually wrapping every array in a `StridedView`, there is the macro annotation
-`@strided some_expression`, which will wrap all `DenseArray`s appearing in this expression in
+`@strided some_expression`, which will wrap all `DenseArray`s appearing in `some_expression` in
 a `StridedView`. Note that, because `StridedView`s behave lazily under indexing with ranges,
 this acts similar to the `@views` macro in Julia Base, i.e. there is no need to use a view.
 
@@ -177,8 +180,8 @@ and LAPACK routines is based on `StridedArray`. As a consequence, `StridedView` 
 back to BLAS or LAPACK by default. Currently, only matrix multiplication is overloaded so as
 to fall back to BLAS (i.e. `gemm!`) if possible. In general, one should not attempt use e.g.
 matrix factorizations or other lapack operations within the `@strided` context. Support for
-this is on the TODO list. Some BLAS methods (`axpy!`, `axpby!`, scalar multiplication via
-`mul!`, `rmul!` or `lmul!`) are however overloaded by relying on the optimized yet generic
+this is on the TODO list. Some BLAS inspired methods (`axpy!`, `axpby!`, scalar multiplication
+via `mul!`, `rmul!` or `lmul!`) are however overloaded by relying on the optimized yet generic
 `map!` implementation.
 
 `StridedView`s can currently only be created with certainty from `DenseArray` (typically just
@@ -186,7 +189,13 @@ this is on the TODO list. Some BLAS methods (`axpy!`, `axpby!`, scalar multiplic
 constructor will first act on the underlying parent array, and then try to mimic the corresponding
 view or reshape operation using `sview` and `sreshape`. These, however, are more limited then
 their Base counterparts (because they need to guarantee that the result still has a strided
-memory layout with respect to the new dimensions), so an error can result. `Base.ReinterpretArray`
+memory layout with respect to the new dimensions), so an error can result. However, this approach
+can also succeed in creating `StridedView` wrappers around combinations of `view` and `reshape`
+that are not recognised as `Base.StridedArray`. For example, `reshape(view(randn(40,40), 1:36, 1:20), (6,6,5,4))`
+is not a `Base.StridedArrray`, and indeed, it cannot statically be inferred to be strided, from
+only knowing the argument types provided to `view` and `reshape`. For example, the similarly looking
+`reshape(view(randn(40,40), 1:36, 1:20), (6,3,10,4))` is not strided. The `StridedView` constructor
+will try to act on both, and yield a runtime error in the second case. Note that `Base.ReinterpretArray`
 is currently not supported.
 
 Note again that, unlike `StridedArray`s, `StridedView`s behave lazily (i.e. still produce a view
@@ -201,7 +210,8 @@ It behaves in all respects the same as `StridedView` (they are both subtypes of 
 except that by itself it does not keep a reference to the parent array in a way that is visible
 to Julia's garbage collector. It can therefore not be the return value of an operation (in
 particular `similar(::UnsafeStridedView, ...) -> ::StridedView`) and an explicit reference to
-the parent array needs to be kept alive.
+the parent array needs to be kept alive. Furthermore, `UnsafeStridedView` wrappers can only
+be created of `AbstractArray{T}` instances with `isbitstype(T)`.
 
 There is a corresponding `@unsafe_strided` macro annotation. However, in this case the arrays
 in the expression need to be identified explicitly as

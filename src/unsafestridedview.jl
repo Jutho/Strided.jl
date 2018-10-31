@@ -65,7 +65,7 @@ Base.conj(a::UnsafeStridedView) = UnsafeStridedView(a.ptr, a.size, a.strides, a.
 function Base.permutedims(a::UnsafeStridedView{<:Any,N}, p) where {N}
     (length(p) == N && TupleTools.isperm(p)) || throw(ArgumentError("Invalid permutation of length $N: $p"))
     newsize = TupleTools._permute(a.size, p)
-    newstrides = _simplifypermutestrides(TupleTools._permute(a.strides, p), newsize)
+    newstrides = _simplifystrides(TupleTools._permute(a.strides, p), newsize)
     return UnsafeStridedView(a.ptr, newsize, newstrides, a.offset, a.op)
 end
 
@@ -97,9 +97,9 @@ end
 @inline function sreshape(a::UnsafeStridedView, newsize::Dims)
     if any(isequal(0), newsize)
         any(isequal(0), size(a)) || throw(DimensionMismatch())
-        newstrides = _defaultstrides(newsize)
+        newstrides = _simplifystrides(_defaultstrides(newsize), newsize)
     else
-        newstrides = _computereshapestrides(newsize, size(a), strides(a))
+        newstrides = _simplifystrides(_computereshapestrides(newsize, size(a), strides(a)), newsize)
     end
     UnsafeStridedView(a.ptr, newsize, newstrides, a.offset, a.op)
 end

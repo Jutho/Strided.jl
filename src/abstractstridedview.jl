@@ -17,6 +17,12 @@ function Base.convert(T::Type{<:DenseArray}, a::AbstractStridedView)
     copyto!(StridedView(b), a)
     return b
 end
+# following method because of ambiguity warning
+function Base.convert(::Type{T}, a::AbstractStridedView) where {T<:Array}
+    b = T(undef, size(a))
+    copyto!(StridedView(b), a)
+    return b
+end
 function Base.convert(::Type{Array}, a::AbstractStridedView{T}) where {T}
     b = Array{T}(undef, size(a))
     copyto!(StridedView(b), a)
@@ -135,7 +141,7 @@ Base.show(io::IO, e::ReshapeException) = print(io, "Cannot produce a reshaped St
 @inline sview(a::AbstractStridedView{<:Any,N}, I::Vararg{Union{RangeIndex,Colon},N}) where {N} = getindex(a, I...)
 @inline sview(a::AbstractStridedView, I::Union{RangeIndex,Colon}) = getindex(sreshape(a, (length(a),)), I...)
 
-@inline view(a::AbstractStridedView{<:Any,N}, I::Vararg{Union{RangeIndex,Colon},N}) where {N} = getindex(a, I...)
+@inline Base.view(a::AbstractStridedView{<:Any,N}, I::Vararg{Union{RangeIndex,Colon},N}) where {N} = getindex(a, I...)
 
 @inline sview(a::DenseArray{<:Any,N}, I::Vararg{Union{RangeIndex,Colon},N}) where {N} = getindex(StridedView(a), I...)
 @inline sview(a::DenseArray, I::Union{RangeIndex,Colon}) = getindex(sreshape(StridedView(a), (length(a),)), I...)
@@ -258,14 +264,14 @@ let
     end
 end
 
-function _simplifypermutestrides(strides::Dims{N}, size::Dims{N}) where {N}
-    if size[2] == 1
+function _simplifystrides(strides::Dims{N}, size::Dims{N}) where {N}
+    if size[2] == 1 || size[2] == 0
         news2 = max(strides[1]*size[1], strides[2])
         newtail = (news2, TupleTools.tail2(strides)...)
-        return (strides[1], _simplifypermutestrides(newtail, Base.tail(size))...)
+        return (strides[1], _simplifystrides(newtail, Base.tail(size))...)
     else
-        return (strides[1], _simplifypermutestrides(Base.tail(strides), Base.tail(size))...)
+        return (strides[1], _simplifystrides(Base.tail(strides), Base.tail(size))...)
     end
 end
-_simplifypermutestrides(strides::Dims{1}, size::Dims{1}) = strides
-_simplifypermutestrides(strides::Dims{0}, size::Dims{0}) = strides
+_simplifystrides(strides::Dims{1}, size::Dims{1}) = (size[1] == 0 || size[1] == 1) ? (max(strides[1],1),) : strides[1]
+_simplifystrides(strides::Dims{0}, size::Dims{0}) = strides
