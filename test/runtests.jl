@@ -11,7 +11,11 @@ Random.seed!(1234)
         A1 = randn(T1, (60,60))
         B1 = SV(A1)
         for op1 in (identity, conj, transpose, adjoint)
-            @test op1(A1) == op1(B1) == SV(op1(A1))
+            if op1 == transpose || op1 == adjoint
+                @test op1(A1) == op1(B1) == SV(op1(A1))
+            else
+                @test op1(A1) == op1(B1)
+            end
             for op2 in (identity, conj, transpose, adjoint)
                 @test op2(op1(A1)) == op2(op1(B1))
             end
@@ -20,7 +24,11 @@ Random.seed!(1234)
         A2 = view(A1, 1:36, 1:20)
         B2 = SV(A2)
         for op1 in (identity, conj, transpose, adjoint)
-            @test op1(A2) == op1(B2)
+            if op1 == transpose || op1 == adjoint
+                @test op1(A2) == op1(B2) == SV(op1(A2))
+            else
+                @test op1(A2) == op1(B2)
+            end
             for op2 in (identity, conj, transpose, adjoint)
                 @test op2(op1(A2)) == op2(op1(B2))
             end
@@ -34,7 +42,11 @@ Random.seed!(1234)
         @test stride(A3, 2) == stride(B3, 2)
         @test stride(A3, 3) == stride(B3, 3)
         for op1 in (identity, conj, transpose, adjoint)
-            @test op1(A3) == op1(B3)
+            if op1 == transpose || op1 == adjoint
+                @test op1(A3) == op1(B3) == SV(op1(A3))
+            else
+                @test op1(A3) == op1(B3)
+            end
             for op2 in (identity, conj, transpose, adjoint)
                 @test op2(op1(A3)) == op2(op1(B3))
             end
