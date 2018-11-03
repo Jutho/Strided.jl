@@ -340,3 +340,102 @@ end
         end
     end
 end
+
+@testset "@strided macro" begin
+    @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
+        A1, A2, A3 = rand(T, (10,)), rand(T, (10,10)), rand(T, (10,10,10))
+
+        @test (@strided(A1 .+ sin.(A2 .- 3))) isa StridedView
+        @test (@strided(A1 .+ sin.(A2 .- 3))) ≈ A1 .+ sin.(A2 .- 3)
+        @test (@strided(A2' .* A3 .- Ref(0.5))) ≈ A2' .* A3 .- Ref(0.5)
+        @test (@strided(A2' .* A3 .- max.(abs.(A1),real.(A3)))) ≈ A2' .* A3 .- max.(abs.(A1),real.(A3))
+
+        B2 = view(A2, :, 1:2:10)
+        @test (@strided(A1 .+ sin.(view(A2,:,1:2:10) .- 3))) ≈
+            (@strided(A1 .+ sin.(B2 .- 3))) ≈
+            A1 .+ sin.(view(A2,:,1:2:10) .- 3)
+
+        B2 = view(A2', :, 1:6)
+        B3 = view(A3,:,1:6,4)
+        @test (@strided(view(A2',:,1:6) .* view(A3,:,1:6,4) .- Ref(0.5))) ≈
+            (@strided(B2 .* B3 .- Ref(0.5))) ≈
+            view(A2',:,1:6) .* view(A3,:,1:6,4) .- Ref(0.5)
+
+        B2 = view(A2, :, 3)
+        B3 = view(A3, 1:5, :, 2:2:10)
+        B1 = view(A1, 1:5)
+        B3b = view(A3, 4:4, 4:4, 2:2:10)
+        @test (@strided(view(A2,:,3)' .* view(A3,1:5,:,2:2:10) .- max.(abs.(view(A1,1:5)),real.(view(A3,4:4,4:4,2:2:10))))) ≈
+            (@strided(B2' .* B3 .- max.(abs.(B1),real.(B3b)))) ≈
+            view(A2,:,3)' .* view(A3,1:5,:,2:2:10) .- max.(abs.(view(A1,1:5)),real.(view(A3,4:4,4:4,2:2:10)))
+
+        B2 = reshape(A2, (10,2,5))
+        @test (@strided(A1 .+ sin.(reshape(A2, (10,2,5)) .- 3))) ≈
+            (@strided(A1 .+ sin.(B2 .- 3))) ≈
+            A1 .+ sin.(reshape(A2, (10,2,5)) .- 3)
+
+        B2 = reshape(A2, 1, 100)
+        B3 = reshape(A3, 100, 1, 10)
+        @test (@strided(reshape(A2, 1, 100)' .* reshape(A3, 100, 1, 10) .- Ref(0.5))) ≈
+            (@strided(B2' .* B3 .- Ref(0.5))) ≈
+            reshape(A2, 1, 100)' .* reshape(A3, 100, 1, 10) .- Ref(0.5)
+
+        B2 = view(A2, :, 3)
+        B3 = reshape(view(A3, 1:5, :, :), 5, 10, 5, 2)
+        B1 = view(A1, 1:5)
+        B3b = view(A3, 4:4, 4:4, 2:2:10)
+        @test (@strided(view(A2,:,3)' .* reshape(view(A3,1:5,:,:), 5, 10, 5, 2) .- max.(abs.(view(A1,1:5)),real.(view(A3,4:4,4:4,2:2:10))))) ≈
+            (@strided(B2' .* B3 .- max.(abs.(B1),real.(B3b)))) ≈
+            view(A2,:,3)' .* reshape(view(A3,1:5,:,:), 5, 10, 5, 2) .- max.(abs.(view(A1,1:5)),real.(view(A3,4:4,4:4,2:2:10)))
+    end
+end
+
+@testset "@unsafe_strided macro" begin
+    @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
+        A1, A2, A3 = rand(T, (10,)), rand(T, (10,10)), rand(T, (10,10,10))
+
+        @test (@unsafe_strided(A1,A2,A1 .+ sin.(A2 .- 3))) isa StridedView
+
+        @test (@unsafe_strided(A1,A2,A1 .+ sin.(A2 .- 3))) ≈ A1 .+ sin.(A2 .- 3)
+        @test (@unsafe_strided(A2,A3, A2' .* A3 .- Ref(0.5))) ≈ A2' .* A3 .- Ref(0.5)
+        @test (@unsafe_strided(A1,A2,A3, A2' .* A3 .- max.(abs.(A1),real.(A3)))) ≈ A2' .* A3 .- max.(abs.(A1),real.(A3))
+
+        B2 = view(A2, :, 1:2:10)
+        @test (@unsafe_strided(A1,A2,A1 .+ sin.(view(A2,:,1:2:10) .- 3))) ≈
+            (@unsafe_strided(A1,B2,A1 .+ sin.(B2 .- 3))) ≈
+            A1 .+ sin.(view(A2,:,1:2:10) .- 3)
+
+        B2 = view(A2', :, 1:6)
+        B3 = view(A3,:,1:6,4)
+        @test (@unsafe_strided(A2,A3,view(A2',:,1:6) .* view(A3,:,1:6,4) .- Ref(0.5))) ≈
+            (@unsafe_strided(B2,B3,B2 .* B3 .- Ref(0.5))) ≈
+            view(A2',:,1:6) .* view(A3,:,1:6,4) .- Ref(0.5)
+
+        B2 = view(A2, :, 3)
+        B3 = view(A3, 1:5, :, 2:2:10)
+        B1 = view(A1, 1:5)
+        B3b = view(A3, 4:4, 4:4, 2:2:10)
+        @test (@unsafe_strided(A1,A2,A3,view(A2,:,3)' .* view(A3,1:5,:,2:2:10) .- max.(abs.(view(A1,1:5)),real.(view(A3,4:4,4:4,2:2:10))))) ≈
+            (@unsafe_strided(B1,B2,B3,B2' .* B3 .- max.(abs.(B1),real.(B3b)))) ≈
+            view(A2,:,3)' .* view(A3,1:5,:,2:2:10) .- max.(abs.(view(A1,1:5)),real.(view(A3,4:4,4:4,2:2:10)))
+
+        B2 = reshape(A2, (10,2,5))
+        @test (@unsafe_strided(A1,A2,A1 .+ sin.(reshape(A2, (10,2,5)) .- 3))) ≈
+            (@unsafe_strided(A1,B2,A1 .+ sin.(B2 .- 3))) ≈
+            A1 .+ sin.(reshape(A2, (10,2,5)) .- 3)
+
+        B2 = reshape(A2, 1, 100)
+        B3 = reshape(A3, 100, 1, 10)
+        @test (@unsafe_strided(A2,A3,reshape(A2, 1, 100)' .* reshape(A3, 100, 1, 10) .- Ref(0.5))) ≈
+            (@unsafe_strided(B2,B3,B2' .* B3 .- Ref(0.5))) ≈
+            reshape(A2, 1, 100)' .* reshape(A3, 100, 1, 10) .- Ref(0.5)
+
+        B2 = view(A2, :, 3)
+        B3 = reshape(view(A3, 1:5, :, :), 5, 10, 5, 2)
+        B1 = view(A1, 1:5)
+        B3b = view(A3, 4:4, 4:4, 2:2:10)
+        @test (@unsafe_strided(A1,A2,A3,view(A2,:,3)' .* reshape(view(A3,1:5,:,:), 5, 10, 5, 2) .- max.(abs.(view(A1,1:5)),real.(view(A3,4:4,4:4,2:2:10))))) ≈
+            (@unsafe_strided(B1,B2,B3,B2' .* B3 .- max.(abs.(B1),real.(B3b)))) ≈
+            view(A2,:,3)' .* reshape(view(A3,1:5,:,:), 5, 10, 5, 2) .- max.(abs.(view(A1,1:5)),real.(view(A3,4:4,4:4,2:2:10)))
+    end
+end

@@ -134,6 +134,9 @@ struct ParentIndex
 end
 
 function sreshape end
+
+sreshape(a::AbstractStridedView,args::Vararg{Int}) = sreshape(a, args)
+
 struct ReshapeException <: Exception
 end
 Base.show(io::IO, e::ReshapeException) = print(io, "Cannot produce a reshaped StridedView without allocating, try sreshape(copy(array), newsize) or fall back to reshape(array, newsize)")
