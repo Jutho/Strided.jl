@@ -256,6 +256,27 @@ end
     end
 end
 
+@testset "complete reductions with $SV" for SV in (StridedView, UnsafeStridedView)
+    @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
+        R1 = rand(T, (10, 10, 10, 10, 10, 10))
+
+        @test sum(R1) ≈ sum(SV(R1))
+        @test maximum(abs, R1) ≈ maximum(abs, SV(R1))
+        @test minimum(real, R1) ≈ minimum(real, SV(R1))
+        @test sum(x->real(x)<0, R1) == sum(x->real(x)<0, SV(R1))
+
+        R1 = permutedims(R1, (randperm(6)...,))
+
+        @test sum(R1) ≈ sum(SV(R1))
+        @test maximum(abs, R1) ≈ maximum(abs, SV(R1))
+        @test minimum(real, R1) ≈ minimum(real, SV(R1))
+        @test sum(x->real(x)<0, R1) == sum(x->real(x)<0, SV(R1))
+
+        R2 = rand(T, (5,5,5))
+        @test prod(exp, SV(R2)) ≈ exp(sum(SV(R2)))
+    end
+end
+
 @testset "multiplication with $SV" for SV in (StridedView, UnsafeStridedView)
     @testset for T1 in (Float32, Float64, Complex{Float32}, Complex{Float64})
         d = 20

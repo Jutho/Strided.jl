@@ -32,17 +32,22 @@ function Base.map!(f::F, b::AbstractStridedView{<:Any,N}, a1::AbstractStridedVie
     return b
 end
 
-function _mapreduce(f, op, A::AbstractStridedView, nt = nothing)
-    dims = size(A)
-    if nt === nothing
-        out = Base.reducedim_init(f, op, A, ntuple(identity, ndims(A)))
-    else
-        out = Base.reducedim_initarray(A, ntuple(identity, ndims(A)), nt.init)
+function _mapreduce(f, op, A::AbstractStridedView{T}, nt = nothing) where {T}
+    if length(A) == 0
+        b = Base.mapreduce_empty(f, op, T)
+        return nt === nothing ? b : op(b, nt.init)
     end
-    _mapreducedim!(f, op, zero, dims, (sreshape(out, one.(dims)), A))
-#     if Threads.nthreads() == 1 || Threads.in_threaded_loop[] || prod(dims) < BLOCKSIZE
-# #        _mapreducedim1!(f, op, nothing,# dims, (out, A))
-#     end
+
+    dims = size(A)
+    a = Base.mapreduce_first(f, op, first(A))
+    a2 = nt === nothing ? a : op(a, nt.init)
+    out = similar(A, typeof(a2), (1,))
+    if nt === nothing
+        _init_reduction!(out, f, op, a)
+    else
+        out[ParentIndex(1)] = nt.init
+    end
+    _mapreducedim!(f, op, nothing, dims, (sreshape(out, one.(dims)), A))
     return out[ParentIndex(1)]
 end
 
@@ -133,7 +138,7 @@ function _mapreducedim_impl!(f::F1, op::F2, initop::F3, dims::NTuple{N,Int}, str
             if initop !== nothing
                 a = initop(a)
             end
-            _init_threadedout!(threadedout, f, op, a)
+            _init_reduction!(threadedout, f, op, a)
             for i = 1:length(threadoffsets)
                 threadoffsets[i] = (i-1, Base.tail(threadoffsets[i])...)
             end
@@ -155,13 +160,13 @@ function _mapreducedim_impl!(f::F1, op::F2, initop::F3, dims::NTuple{N,Int}, str
     return
 end
 
-_init_threadedout!(out, f, op::Union{typeof(+),typeof(Base.add_sum)}, a) = fill!(out, zero(a))
-_init_threadedout!(out, f, op::Union{typeof(*),typeof(Base.mul_prod)}, a) = fill!(out, one(a))
-_init_threadedout!(out, f, op::typeof(min), a) = fill!(out, a)
-_init_threadedout!(out, f, op::typeof(max), a) = fill!(out, a)
-_init_threadedout!(out, f, op::typeof(&), a) = fill!(out, true)
-_init_threadedout!(out, f, op::typeof(|), a) = fill!(out, false)
-_init_threadedout!(out, f, op, a) = op(a,a) == a ? fill!(out, a) : error("unknown reduction; incompatible with multithreading")
+_init_reduction!(out, f, op::Union{typeof(+),typeof(Base.add_sum)}, a) = fill!(out, zero(a))
+_init_reduction!(out, f, op::Union{typeof(*),typeof(Base.mul_prod)}, a) = fill!(out, one(a))
+_init_reduction!(out, f, op::typeof(min), a) = fill!(out, a)
+_init_reduction!(out, f, op::typeof(max), a) = fill!(out, a)
+_init_reduction!(out, f, op::typeof(&), a) = fill!(out, true)
+_init_reduction!(out, f, op::typeof(|), a) = fill!(out, false)
+_init_reduction!(out, f, op, a) = op(a,a) == a ? fill!(out, a) : error("unknown reduction; incompatible with multithreading")
 
 @noinline function _mapreduce_threaded!(threadblocks, threadoffsets, f::F1, op::F2, initop::F3, blocks::NTuple{N,Int}, arrays::NTuple{M,AbstractStridedView}, strides::NTuple{M,NTuple{N,Int}}) where {F1,F2,F3,N,M}
     @inbounds Threads.@threads for i = 1:length(threadblocks)
