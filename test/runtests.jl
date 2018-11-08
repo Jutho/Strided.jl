@@ -94,7 +94,7 @@ end
 @testset "reshape and permutedims with $SV" for SV in (StridedView, UnsafeStridedView)
     @testset for T in (Float32, Float64, Complex{Float32}, Complex{Float64})
         A0 = randn(T, 10)
-        GC.@preserve A0
+        GC.@preserve A0 begin
             @test permutedims(SV(A0), (1,)) == A0
         end
 
