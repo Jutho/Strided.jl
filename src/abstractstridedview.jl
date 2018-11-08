@@ -276,5 +276,5 @@ function _simplifystrides(strides::Dims{N}, size::Dims{N}) where {N}
         return (strides[1], _simplifystrides(Base.tail(strides), Base.tail(size))...)
     end
 end
-_simplifystrides(strides::Dims{1}, size::Dims{1}) = (size[1] == 0 || size[1] == 1) ? (max(strides[1],1),) : strides[1]
+_simplifystrides(strides::Dims{1}, size::Dims{1}) = (size[1] == 0 || size[1] == 1) ? (max(strides[1],1),) : (strides[1],)
 _simplifystrides(strides::Dims{0}, size::Dims{0}) = strides

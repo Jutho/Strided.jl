@@ -93,6 +93,11 @@ end
 
 @testset "reshape and permutedims with $SV" for SV in (StridedView, UnsafeStridedView)
     @testset for T in (Float32, Float64, Complex{Float32}, Complex{Float64})
+        A0 = randn(T, 10)
+        GC.@preserve A0
+            @test permutedims(SV(A0), (1,)) == A0
+        end
+
         @testset "in-place matrix operations" begin
             A1 = randn(T, (1000,1000))
             A2 = similar(A1)
