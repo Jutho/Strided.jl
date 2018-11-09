@@ -127,7 +127,7 @@ function __mul!(C::AbstractStridedView{<:Any,2}, A::AbstractStridedView{<:Any,2}
         if β == 0
             _mapreducedim!(*, +, zero, (m,n,k), (C2,A2,B2))
         elseif β == 1
-            _mapreducedim!(*, +, identity, (m,n,k), (C2,A2,B2))
+            _mapreducedim!(*, +, nothing, (m,n,k), (C2,A2,B2))
         else
             _mapreducedim!(*, +, x->β*x, (m,n,k), (C2,A2,B2))
         end
@@ -136,7 +136,7 @@ function __mul!(C::AbstractStridedView{<:Any,2}, A::AbstractStridedView{<:Any,2}
         if β == 0
             _mapreducedim!(f, +, zero, (m,n,k), (C2,A2,B2))
         elseif β == 1
-            _mapreducedim!(f, +, identity, (m,n,k), (C2,A2,B2))
+            _mapreducedim!(f, +, nothing, (m,n,k), (C2,A2,B2))
         else
             _mapreducedim!(f, +, x->β*x, (m,n,k), (C2,A2,B2))
         end
