@@ -52,17 +52,21 @@ LinearAlgebra.axpy!(a::Number, X::AbstractStridedView{<:Number,N}, Y::AbstractSt
 LinearAlgebra.axpby!(a::Number, X::AbstractStridedView{<:Number,N}, b::Number, Y::AbstractStridedView{<:Number,N}) where {N} =
     b == 1 ? axpy!(a, X, Y) : (b == 0 ? mul!(Y, a, X) : map!((x,y)->(a*x+b*y), Y, X, Y))
 
-function LinearAlgebra.mul!(C::AbstractStridedView{<:Any,2}, A::AbstractStridedView{<:Any,2}, B::AbstractStridedView{<:Any,2})
+function LinearAlgebra.mul!(C::AbstractStridedView{T,2}, A::AbstractStridedView{<:Any,2}, B::AbstractStridedView{<:Any,2}, α = one(T), β = zero(T)) where {T}
+    if !(eltype(C) <: LinearAlgebra.BlasFloat && eltype(A) == eltype(B) == eltype(C))
+        return __mul!(C, A, B, α, β)
+    end
+    # C.op is identity or conj
     if C.op == conj
         if stride(C,1) < stride(C,2)
-            mul!(conj(C), conj(A), conj(B))
+            _mul!(conj(C), conj(A), conj(B), conj(α), conj(β))
         else
-            mul!(C', B', A')
+            _mul!(C', B', A', conj(α), conj(β))
         end
     elseif stride(C,1) > stride(C,2)
-        mul!(transpose(C), transpose(B), transpose(A))
+        _mul!(transpose(C), transpose(B), transpose(A), α, β)
     else
-        _mul!(C, A, B)
+        _mul!(C, A, B, α, β)
         # EXPERIMENTAL: only use in combination with BLAS.set_num_threads(1)
         # if Threads.nthreads() == 1 || Threads.in_threaded_loop[] || prod(size(C)) < Threads.nthreads()*1024
         #     _mul!(C, A, B)
@@ -76,56 +80,70 @@ function LinearAlgebra.mul!(C::AbstractStridedView{<:Any,2}, A::AbstractStridedV
     return C
 end
 
-_mul!(C::AbstractStridedView{<:Any,2}, A::AbstractStridedView{<:Any,2}, B::AbstractStridedView{<:Any,2}) = __mul!(C, A, B)
-function __mul!(C::AbstractStridedView{<:Any,2}, A::AbstractStridedView{<:Any,2}, B::AbstractStridedView{<:Any,2})
-    if stride(A,1) < stride(A,2) && stride(B,1) < stride(B,2)
-        LinearAlgebra.generic_matmatmul!(C,'N','N',A,B)
-    elseif stride(A,1) < stride(A,2)
-        LinearAlgebra.generic_matmatmul!(C,'N','T',A,transpose(B))
-    elseif stride(B,1) < stride(B,2)
-        LinearAlgebra.generic_matmatmul!(C,'T','N',transpose(A),B)
-    else
-        LinearAlgebra.generic_matmatmul!(C,'T','T',transpose(A),transpose(B))
+function isblasmatrix(A::AbstractStridedView{T,2}) where {T<:LinearAlgebra.BlasFloat}
+    if A.op == identity
+        return stride(A,1) == 1 || stride(A,2) == 1
+    elseif A.op == conj
+        return stride(A, 2) == 1
+    else # should never happen
+        return false
     end
-    return C
 end
-function _mul!(C::AbstractStridedView{T,2}, A::AbstractStridedView{T,2}, B::AbstractStridedView{T,2}) where {T<:LinearAlgebra.BlasFloat}
-    if !(any(isequal(1), strides(A)) && any(isequal(1), strides(B)) && any(isequal(1), strides(C)))
-        return __mul!(C,A,B)
-    end
+function getblasmatrix(A::AbstractStridedView{T,2}) where {T<:LinearAlgebra.BlasFloat}
     if A.op == identity
         if stride(A,1) == 1
-            A2 = A
-            cA = 'N'
+            return A, 'N'
         else
-            A2 = transpose(A)
-            cA = 'T'
+            return transpose(A), 'T'
         end
     else
-        if stride(A,1) != 1
-            A2 = A'
-            cA = 'C'
-        else
-            return LinearAlgebra.generic_matmatmul!(C,'N','N',A,B)
-        end
+        return adjoint(A), 'C'
     end
-    if B.op == identity
-        if stride(B,1) == 1
-            B2 = B
-            cB = 'N'
+end
+
+# here we will have C.op == :identity && stride(C,1) < stride(C,2)
+function _mul!(C::AbstractStridedView{T,2}, A::AbstractStridedView{T,2}, B::AbstractStridedView{T,2}, α, β) where {T<:LinearAlgebra.BlasFloat}
+    if stride(C,1) == 1 && isblasmatrix(A) && isblasmatrix(B)
+        A2, CA = getblasmatrix(A)
+        B2, CB = getblasmatrix(B)
+        LinearAlgebra.BLAS.gemm!(CA, CB, convert(T, α), A2, B2, convert(T, β), C)
+    else
+        return __mul!(C, A, B, α, β)
+    end
+end
+
+# This implementation is faster than LinearAlgebra.generic_matmatmul
+function __mul!(C::AbstractStridedView{<:Any,2}, A::AbstractStridedView{<:Any,2}, B::AbstractStridedView{<:Any,2}, α, β)
+    (size(C,1) == size(A,1) && size(C,2) == size(B,2) && size(A,2) == size(B,1)) ||
+        throw(DimensionMatch("A has size $(size(A)), B has size $(size(B)), C has size $(size(C))"))
+
+    m,n = size(C)
+    k = size(A,2)
+    A2 = sreshape(A, (m, 1, k))
+    B2 = sreshape(permutedims(B,(2,1)), (1, n, k))
+    C2 = sreshape(C, (m, n, 1))
+
+    if α == 1
+        if β == 0
+            _mapreducedim!(*, +, zero, (m,n,k), (C2,A2,B2))
+        elseif β == 1
+            _mapreducedim!(*, +, identity, (m,n,k), (C2,A2,B2))
         else
-            B2 = transpose(B)
-            cB = 'T'
+            _mapreducedim!(*, +, x->β*x, (m,n,k), (C2,A2,B2))
+        end
+    elseif α != 0
+        f = (x,y)->(α*x*y)
+        if β == 0
+            _mapreducedim!(f, +, zero, (m,n,k), (C2,A2,B2))
+        elseif β == 1
+            _mapreducedim!(f, +, identity, (m,n,k), (C2,A2,B2))
+        else
+            _mapreducedim!(f, +, x->β*x, (m,n,k), (C2,A2,B2))
         end
     else
-        if stride(B,1) != 1
-            B2 = B'
-            cB = 'C'
-        else
-            return LinearAlgebra.generic_matmatmul!(C,'N','N',A,B)
-        end
+        rmul!(C, β)
     end
-    LinearAlgebra.BLAS.gemm!(cA,cB,one(T),A2,B2,zero(T),C)
+    return C
 end
 
 # ParentIndex: index directly into parent array
