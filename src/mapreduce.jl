@@ -51,7 +51,7 @@ function _mapreduce(f, op, A::AbstractStridedView{T}, nt = nothing) where {T}
     return out[ParentIndex(1)]
 end
 
-@inline function Base.mapreducedim!(f::F1, op::F2, b::AbstractStridedView{<:Any,N}, a1::AbstractStridedView{<:Any,N}, A::Vararg{AbstractStridedView{<:Any,N}}) where {F1,F2,N}
+@inline function Base.mapreducedim!(f, op, b::AbstractStridedView{<:Any,N}, a1::AbstractStridedView{<:Any,N}, A::Vararg{AbstractStridedView{<:Any,N}}) where {N}
     outdims = size(b)
     dims = map(max, outdims, map(max, map(size, (a1, A...))...))
 
@@ -61,7 +61,7 @@ end
     _mapreducedim!(f, op, nothing, dims, (b, a1, A...))
 end
 
-function _mapreducedim!(f::F1, op::F2, initop::F3, dims::NTuple{N,Int}, arrays::NTuple{M,AbstractStridedView}) where {F1,F2,F3,N,M}
+function _mapreducedim!(@nospecialize(f), @nospecialize(op), @nospecialize(initop), dims::Dims, arrays::Tuple{Vararg{AbstractStridedView}})
     any(isequal(0), dims) && return arrays[1] # don't do anything
 
     _mapreducedim1!(f, op, initop, dims, promoteshape(dims, arrays...))
@@ -69,7 +69,7 @@ function _mapreducedim!(f::F1, op::F2, initop::F3, dims::NTuple{N,Int}, arrays::
     return arrays[1]
 end
 
-function _mapreducedim1!(f::F1, op::F2, initop::F3, dims::NTuple{N,Int}, arrays::NTuple{M,AbstractStridedView}) where {F1,F2,F3,N,M}
+function _mapreducedim1!(@nospecialize(f), @nospecialize(op), @nospecialize(initop), dims::Dims{N}, arrays::Tuple{Vararg{AbstractStridedView}}) where {N}
     # Level 1: fuse dimensions if possible: assume that at least one array, e.g. the output array in arrays[1],
     # has its strides sorted
     allstrides = map(strides, arrays)
@@ -90,7 +90,7 @@ function _mapreducedim1!(f::F1, op::F2, initop::F3, dims::NTuple{N,Int}, arrays:
     return
 end
 
-function _mapreducedim2!(f::F1, op::F2, initop::F3, dims::NTuple{N,Int}, strides::NTuple{M, NTuple{N,Int}}, arrays::NTuple{M,AbstractStridedView}) where {F1,F2,F3,N,M}
+function _mapreducedim2!(@nospecialize(f), @nospecialize(op), @nospecialize(initop), dims, strides, arrays)
     # Level 2: recursively delete dimensions of size 1
     i = findfirst(isequal(1), dims)
     if !(i isa Nothing)
@@ -103,16 +103,15 @@ function _mapreducedim2!(f::F1, op::F2, initop::F3, dims::NTuple{N,Int}, strides
     return
 end
 
-function _mapreducedim_impl!(f::F1, op::F2, initop::F3, dims::NTuple{N,Int}, strides::NTuple{M, NTuple{N,Int}}, arrays::NTuple{M,AbstractStridedView}) where {F1,F2,F3,N,M}
-    # @show dims, strides
+function _mapreducedim_impl!(@nospecialize(f), @nospecialize(op), @nospecialize(initop), dims, strides, arrays)
+    M = length(arrays)
+    N = length(dims)
     # sort order of loops/dimensions by modelling the importance of each dimension
     g = 8*sizeof(Int) - leading_zeros(M+1) # ceil(Int, log2(M+2)) # to account for the fact that there are M arrays, where the first one is counted with a factor 2
     importance = 2 .* ( 1 .<< (g.*(N .- indexorder(strides[1]))))  # first array is output and is more important by a factor 2
     for k = 2:M
         importance = importance .+ ( 1 .<< (g.*(N .- indexorder(strides[k]))))
     end
-    # @show strides
-    # @show importance
 
     p = TupleTools.sortperm(importance, rev = true)
 
@@ -174,7 +173,7 @@ _init_reduction!(out, f, op, a) = op(a,a) == a ? fill!(out, a) : error("unknown 
     end
 end
 
-@generated function _mapreduce_kernel!(f::F1, op::F2, initop::F3, dims::NTuple{N,Int}, blocks::NTuple{N,Int}, arrays::NTuple{M,AbstractStridedView}, strides::NTuple{M,NTuple{N,Int}}, offsets::NTuple{M,Int}) where {F1,F2,F3,N,M}
+@generated function _mapreduce_kernel!(@nospecialize(f), @nospecialize(op), @nospecialize(initop), dims::NTuple{N,Int}, blocks::NTuple{N,Int}, arrays::NTuple{M,AbstractStridedView}, strides::NTuple{M,NTuple{N,Int}}, offsets::NTuple{M,Int}) where {N,M}
     blockloopvars = [Symbol("J$i") for i = 1:N]
     blockdimvars = [Symbol("d$i") for i = 1:N]
     innerloopvars = [Symbol("j$i") for i = 1:N]
@@ -187,7 +186,7 @@ end
     pre2 = Expr(:block, [:($(stridevars[i,j]) = strides[$j][$i]) for i = 1:N, j=1:M]...)
     pre3 = Expr(:block, [:($(Ivars[j]) = offsets[$j]+1) for j = 1:M]...)
 
-    if F2 == Nothing
+    if op == Nothing
         ex = :(A1[ParentIndex($(Ivars[1]))] = f($([:($(Avars[j])[ParentIndex($(Ivars[j]))]) for j = 2:M]...)))
         exa = :(a = f($([:($(Avars[j])[ParentIndex($(Ivars[j]))]) for j = 2:M]...)))
     else
@@ -225,7 +224,7 @@ end
     end
 
     initvars = [Symbol("init$i") for i = 1:N+1]
-    if F3 !== Nothing
+    if initop !== Nothing
         initex = :(A1[ParentIndex($(Ivars[1]))] = initop(A1[ParentIndex($(Ivars[1]))]))
         i = 1
         if N >= 1
@@ -256,7 +255,7 @@ end
         end
     end
 
-    if F3 === Nothing
+    if initop === Nothing
         for outer i = 1:N
             ex = quote
                 for $(blockloopvars[i]) = 1:blocks[$i]:dims[$i]
