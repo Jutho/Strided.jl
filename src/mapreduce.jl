@@ -168,7 +168,7 @@ _init_reduction!(out, f, op::typeof(&), a) = fill!(out, true)
 _init_reduction!(out, f, op::typeof(|), a) = fill!(out, false)
 _init_reduction!(out, f, op, a) = op(a,a) == a ? fill!(out, a) : error("unknown reduction; incompatible with multithreading")
 
-@noinline function _mapreduce_threaded!(threadblocks, threadoffsets, f::F1, op::F2, initop::F3, blocks::NTuple{N,Int}, arrays::NTuple{M,AbstractStridedView}, strides::NTuple{M,NTuple{N,Int}}) where {F1,F2,F3,N,M}
+@noinline function _mapreduce_threaded!(threadblocks, threadoffsets, f, op, initop, blocks, arrays, strides)
     @inbounds Threads.@threads for i = 1:length(threadblocks)
         _mapreduce_kernel!(f, op, initop, threadblocks[i], blocks, arrays, strides, threadoffsets[i])
     end
