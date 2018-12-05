@@ -52,7 +52,7 @@ LinearAlgebra.axpy!(a::Number, X::AbstractStridedView{<:Number,N}, Y::AbstractSt
 LinearAlgebra.axpby!(a::Number, X::AbstractStridedView{<:Number,N}, b::Number, Y::AbstractStridedView{<:Number,N}) where {N} =
     b == 1 ? axpy!(a, X, Y) : (b == 0 ? mul!(Y, a, X) : map!((x,y)->(a*x+b*y), Y, X, Y))
 
-function LinearAlgebra.mul!(C::AbstractStridedView{T,2}, A::AbstractStridedView{<:Any,2}, B::AbstractStridedView{<:Any,2}, α = one(T), β = zero(T)) where {T}
+function LinearAlgebra.mul!(C::AbstractStridedView{T,2}, A::AbstractStridedView{<:Any,2}, B::AbstractStridedView{<:Any,2}, α = true, β = false) where {T}
     if !(eltype(C) <: LinearAlgebra.BlasFloat && eltype(A) == eltype(B) == eltype(C))
         return __mul!(C, A, B, α, β)
     end
