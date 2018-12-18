@@ -2,10 +2,18 @@ const FN = typeof(identity)
 const FC = typeof(conj)
 const FA = typeof(adjoint)
 const FT = typeof(transpose)
-_methodconj(::FN) = conj
-_methodconj(::FC) = identity
-_methodconj(::FA) = transpose
-_methodconj(::FT) = adjoint
+_conj(::FN) = conj
+_conj(::FC) = identity
+_conj(::FA) = transpose
+_conj(::FT) = adjoint
+_transpose(::FN) = transpose
+_transpose(::FC) = adjoint
+_transpose(::FA) = conj
+_transpose(::FT) = identity
+_adjoint(::FN) = adjoint
+_adjoint(::FC) = transpose
+_adjoint(::FA) = identity
+_adjoint(::FT) = conj
 
 abstract type AbstractStridedView{T,N,F<:Union{FN,FC,FA,FT}} <: AbstractArray{T,N} end
 

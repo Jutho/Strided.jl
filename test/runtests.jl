@@ -91,6 +91,19 @@ Random.seed!(1234)
     end
 end
 
+@testset "elementwise conj, transpose and adjoint" begin
+    @testset for T in (Float32, Float64, Complex{Float32}, Complex{Float64})
+        A = [randn(T,(3,3)) for i=1:5, b=1:4, c=1:3, d=1:2]
+        Ac = deepcopy(A)
+        B = StridedView(A)
+
+        @test conj(B) == conj(A)
+        @test conj(B) == map(conj, B)
+        @test map(transpose, B) == map(transpose, B)
+        @test map(adjoint, B) == map(adjoint, B)
+    end
+end
+
 @testset "reshape and permutedims with $SV" for SV in (StridedView, UnsafeStridedView)
     @testset for T in (Float32, Float64, Complex{Float32}, Complex{Float64})
         A0 = randn(T, 10)
