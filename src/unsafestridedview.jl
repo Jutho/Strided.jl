@@ -83,6 +83,9 @@ LinearAlgebra.adjoint(a::UnsafeStridedView{<:Any,2}) = # act recursively, like B
 LinearAlgebra.transpose(a::UnsafeStridedView{<:Any,2}) = # act recursively, like Base
     permutedims(UnsafeStridedView(a.ptr,a.size,a.strides,a.offset, _transpose(a.op)), (2,1))
 
+Base.map(::FC, a::UnsafeStridedView{<:Real}) = a
+Base.map(::FT, a::UnsafeStridedView{<:Number}) = a
+Base.map(::FA, a::UnsafeStridedView{<:Number}) = conj(a)
 Base.map(::FC, a::UnsafeStridedView) =
     UnsafeStridedView(a.ptr, a.size, a.strides, a.offset, _conj(a.op))
 Base.map(::FT, a::UnsafeStridedView) =

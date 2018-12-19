@@ -85,6 +85,9 @@ LinearAlgebra.adjoint(a::StridedView{<:Any,2}) = # act recursively, like Base
 LinearAlgebra.transpose(a::StridedView{<:Any,2}) = # act recursively, like Base
     permutedims(StridedView(a.parent, a.size, a.strides, a.offset, _transpose(a.op)), (2,1))
 
+Base.map(::FC, a::StridedView{<:Real}) = a
+Base.map(::FT, a::StridedView{<:Number}) = a
+Base.map(::FA, a::StridedView{<:Number}) = conj(a)
 Base.map(::FC, a::StridedView) =
     StridedView(a.parent, a.size, a.strides, a.offset, _conj(a.op))
 Base.map(::FT, a::StridedView) =
