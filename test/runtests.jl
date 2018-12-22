@@ -99,8 +99,8 @@ end
 
         @test conj(B) == conj(A)
         @test conj(B) == map(conj, B)
-        @test map(transpose, B) == map(transpose, B)
-        @test map(adjoint, B) == map(adjoint, B)
+        @test map(transpose, B) == map(transpose, A)
+        @test map(adjoint, B) == map(adjoint, A)
     end
 end
 
