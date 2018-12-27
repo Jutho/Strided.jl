@@ -54,7 +54,7 @@ end
     return a
 end
 
-function Base.getindex(a::UnsafeStridedView{<:Any,N}, I::Vararg{Union{RangeIndex,Colon},N}) where {N}
+function Base.getindex(a::UnsafeStridedView{<:Any,N}, I::Vararg{SliceIndex,N}) where {N}
     UnsafeStridedView(a.ptr, _computeviewsize(a.size, I), _computeviewstrides(a.strides, I), a.offset + _computeviewoffset(a.strides, I), a.op)
 end
 
@@ -72,7 +72,7 @@ function Base.permutedims(a::UnsafeStridedView{<:Any,N}, p) where {N}
     (length(p) == N && TupleTools.isperm(p)) ||
         throw(ArgumentError("Invalid permutation of length $N: $p"))
     newsize = TupleTools._permute(a.size, p)
-    newstrides = _simplifystrides(TupleTools._permute(a.strides, p), newsize)
+    newstrides = TupleTools._permute(a.strides, p)
     return UnsafeStridedView(a.ptr, newsize, newstrides, a.offset, a.op)
 end
 
@@ -96,10 +96,9 @@ Base.map(::FA, a::UnsafeStridedView) =
 @inline function sreshape(a::UnsafeStridedView, newsize::Dims)
     if any(isequal(0), newsize)
         any(isequal(0), size(a)) || throw(DimensionMismatch())
-        newstrides = _simplifystrides(_defaultstrides(newsize), newsize)
+        newstrides = one.(newsize)
     else
-        newstrides =
-            _simplifystrides(_computereshapestrides(newsize, size(a), strides(a)), newsize)
+        newstrides = _computereshapestrides(newsize, size(a), strides(a))
     end
     UnsafeStridedView(a.ptr, newsize, newstrides, a.offset, a.op)
 end

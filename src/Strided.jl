@@ -2,6 +2,7 @@ module Strided
 
 import Base: parent, size, strides, tail, setindex
 using Base: @propagate_inbounds, RangeIndex, Dims
+const SliceIndex = Union{RangeIndex,Colon}
 
 using LinearAlgebra
 

@@ -12,9 +12,11 @@ function _strided(ex::Expr)
             return Expr(:call, ex.args[1], _strided.(ex.args[2:end])...)
         end
     elseif (ex.head == :(=) || ex.head == :(kw)) && ex.args[1] isa Symbol
-        return Expr(ex.head, ex.args[1], Expr(:call, :(Strided.maybeunstrided), _strided(ex.args[2])))
+        return Expr(ex.head, ex.args[1],
+                    Expr(:call, :(Strided.maybeunstrided), _strided(ex.args[2])))
     elseif (ex.head == :(->))
-        return Expr(ex.head, ex.args[1], Expr(:call, :(Strided.maybeunstrided), _strided(ex.args[2])))
+        return Expr(ex.head, ex.args[1],
+                    Expr(:call, :(Strided.maybeunstrided), _strided(ex.args[2])))
     else
         return Expr(ex.head, _strided.(ex.args)...)
     end

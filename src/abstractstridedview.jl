@@ -17,7 +17,9 @@ _adjoint(::FT) = conj
 
 abstract type AbstractStridedView{T,N,F<:Union{FN,FC,FA,FT}} <: AbstractArray{T,N} end
 
-Base.elsize(::Type{<:AbstractStridedView{T}}) where {T} = Base.isbitstype(T) ? sizeof(T) : (Base.isbitsunion(T) ? Base.bitsunionsize(T) : sizeof(Ptr))
+Base.elsize(::Type{<:AbstractStridedView{T}}) where {T} =
+    Base.isbitstype(T) ? sizeof(T) :
+        Base.isbitsunion(T) ? Base.bitsunionsize(T) : sizeof(Ptr))
 
 # Converting back to other DenseArray type:
 function Base.convert(T::Type{<:DenseArray}, a::AbstractStridedView)
@@ -167,22 +169,25 @@ struct ReshapeException <: Exception
 end
 Base.show(io::IO, e::ReshapeException) = print(io, "Cannot produce a reshaped StridedView without allocating, try sreshape(copy(array), newsize) or fall back to reshape(array, newsize)")
 
-@inline sview(a::AbstractStridedView{<:Any,N}, I::Vararg{Union{RangeIndex,Colon},N}) where {N} = getindex(a, I...)
-@inline sview(a::AbstractStridedView, I::Union{RangeIndex,Colon}) = getindex(sreshape(a, (length(a),)), I...)
+@inline sview(a::AbstractStridedView{<:Any,N}, I::Vararg{SliceIndex,N}) where {N} =
+    getindex(a, I...)
+@inline sview(a::AbstractStridedView, I::SliceIndex) =
+    getindex(sreshape(a, (length(a),)), I...)
 
-@inline Base.view(a::AbstractStridedView{<:Any,N}, I::Vararg{Union{RangeIndex,Colon},N}) where {N} = getindex(a, I...)
+@inline Base.view(a::AbstractStridedView{<:Any,N}, I::Vararg{SliceIndex,N}) where {N} =
+    getindex(a, I...)
 
-@inline sview(a::DenseArray{<:Any,N}, I::Vararg{Union{RangeIndex,Colon},N}) where {N} = getindex(StridedView(a), I...)
-@inline sview(a::DenseArray, I::Union{RangeIndex,Colon}) = getindex(sreshape(StridedView(a), (length(a),)), I...)
+@inline sview(a::DenseArray{<:Any,N}, I::Vararg{SliceIndex,N}) where {N} =
+    getindex(StridedView(a), I...)
+@inline sview(a::DenseArray, I::SliceIndex) =
+    getindex(sreshape(StridedView(a), (length(a),)), I...)
 
 # Auxiliary routines
 @inline _computeind(indices::Tuple{}, strides::Tuple{}) = 1
-@inline _computeind(indices::NTuple{N,Int}, strides::NTuple{N,Int}) where {N} = (indices[1]-1)*strides[1] + _computeind(tail(indices), tail(strides))
+@inline _computeind(indices::NTuple{N,Int}, strides::NTuple{N,Int}) where {N} =
+    (indices[1]-1)*strides[1] + _computeind(tail(indices), tail(strides))
 
-_defaultstrides(sz::Tuple{}, s = 1) = ()
-_defaultstrides(sz::Dims, s = 1) = (s, _defaultstrides(tail(sz), s*sz[1])...)
-
-@inline function _computeviewsize(oldsize::NTuple{N,Int}, I::NTuple{N,Union{RangeIndex,Colon}}) where {N}
+@inline function _computeviewsize(oldsize::NTuple{N,Int}, I::NTuple{N,SliceIndex}) where {N}
     if isa(I[1], Int)
         return _computeviewsize(tail(oldsize), tail(I))
     elseif isa(I[1], Colon)
@@ -193,7 +198,7 @@ _defaultstrides(sz::Dims, s = 1) = (s, _defaultstrides(tail(sz), s*sz[1])...)
 end
 _computeviewsize(::Tuple{}, ::Tuple{}) = ()
 
-@inline function _computeviewstrides(oldstrides::NTuple{N,Int}, I::NTuple{N,Union{RangeIndex,Colon}}) where {N}
+@inline function _computeviewstrides(oldstrides::NTuple{N,Int}, I::NTuple{N,SliceIndex}) where {N}
     if isa(I[1], Int)
         return _computeviewstrides(tail(oldstrides), tail(I))
     elseif isa(I[1], Colon)
@@ -204,7 +209,7 @@ _computeviewsize(::Tuple{}, ::Tuple{}) = ()
 end
 _computeviewstrides(::Tuple{}, ::Tuple{}) = ()
 
-@inline function _computeviewoffset(strides::NTuple{N,Int}, I::NTuple{N,Union{RangeIndex,Colon}}) where {N}
+@inline function _computeviewoffset(strides::NTuple{N,Int}, I::NTuple{N,SliceIndex}) where {N}
     if isa(I[1], Colon)
         return _computeviewoffset(tail(strides), tail(I))
     else
@@ -246,7 +251,7 @@ function _computereshapestrides(newsize::Dims, oldsize::Dims{N}, strides::Dims{N
     if r == 0
         return (strides[1], _computereshapestrides(tail(newsize), (d, tail(oldsize)...), (newsize[1]*strides[1], tail(strides)...))...)
     else
-        if oldsize[1]*strides[1] == strides[2]
+        if oldsize[1]*strides[1] == strides[2] || oldsize[2] == 1
             return _computereshapestrides(newsize, (oldsize[1]*oldsize[2], TupleTools.tail2(oldsize)...), (strides[1], TupleTools.tail2(strides)...))
         else
             throw(ReshapeException())
@@ -292,15 +297,3 @@ let
         return mranges, nranges
     end
 end
-
-function _simplifystrides(strides::Dims{N}, size::Dims{N}) where {N}
-    if size[2] == 1 || size[2] == 0
-        news2 = max(strides[1]*size[1], strides[2])
-        newtail = (news2, TupleTools.tail2(strides)...)
-        return (strides[1], _simplifystrides(newtail, Base.tail(size))...)
-    else
-        return (strides[1], _simplifystrides(Base.tail(strides), Base.tail(size))...)
-    end
-end
-_simplifystrides(strides::Dims{1}, size::Dims{1}) = (size[1] == 0 || size[1] == 1) ? (max(strides[1],1),) : (strides[1],)
-_simplifystrides(strides::Dims{0}, size::Dims{0}) = strides
