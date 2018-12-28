@@ -19,7 +19,7 @@ abstract type AbstractStridedView{T,N,F<:Union{FN,FC,FA,FT}} <: AbstractArray{T,
 
 Base.elsize(::Type{<:AbstractStridedView{T}}) where {T} =
     Base.isbitstype(T) ? sizeof(T) :
-        Base.isbitsunion(T) ? Base.bitsunionsize(T) : sizeof(Ptr))
+        (Base.isbitsunion(T) ? Base.bitsunionsize(T) : sizeof(Ptr))
 
 # Converting back to other DenseArray type:
 function Base.convert(T::Type{<:DenseArray}, a::AbstractStridedView)
