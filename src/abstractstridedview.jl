@@ -110,7 +110,7 @@ function getblasmatrix(A::AbstractStridedView{T,2}) where {T<:LinearAlgebra.Blas
         return blasstrides(adjoint(A)), 'C'
     end
 end
-function blasstrides(A::AbstractStridedView{T,2})
+function blasstrides(A::AbstractStridedView{T,2}) where {T}
     # canonialize strides to make compatible with gemm
     if size(A, 2) == 1
         return sreshape(A, size(A)) # will reset A.strides[2] == A.strides[1]*A.size[1]
