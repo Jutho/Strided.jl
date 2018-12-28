@@ -102,12 +102,20 @@ end
 function getblasmatrix(A::AbstractStridedView{T,2}) where {T<:LinearAlgebra.BlasFloat}
     if A.op == identity
         if stride(A,1) == 1
-            return A, 'N'
+            return blasstrides(A), 'N'
         else
-            return transpose(A), 'T'
+            return blasstrides(transpose(A)), 'T'
         end
     else
-        return adjoint(A), 'C'
+        return blasstrides(adjoint(A)), 'C'
+    end
+end
+function blasstrides(A::AbstractStridedView{T,2})
+    # canonialize strides to make compatible with gemm
+    if size(A, 2) == 1
+        return sreshape(A, size(A)) # will reset A.strides[2] == A.strides[1]*A.size[1]
+    else
+        return A
     end
 end
 
@@ -116,7 +124,8 @@ function _mul!(C::AbstractStridedView{T,2}, A::AbstractStridedView{T,2}, B::Abst
     if stride(C,1) == 1 && isblasmatrix(A) && isblasmatrix(B)
         A2, CA = getblasmatrix(A)
         B2, CB = getblasmatrix(B)
-        LinearAlgebra.BLAS.gemm!(CA, CB, convert(T, α), A2, B2, convert(T, β), C)
+        C2 = blasstrides(C)
+        LinearAlgebra.BLAS.gemm!(CA, CB, convert(T, α), A2, B2, convert(T, β), C2)
     else
         return __mul!(C, A, B, α, β)
     end
