@@ -56,7 +56,7 @@ end
 
 # force inlining so that view typically does not need to be created
 @inline function Base.getindex(a::StridedView{<:Any,N},
-        I::Vararg{Union{RangeIndex,Colon},N}) where N
+        I::Vararg{SliceIndex,N}) where N
     StridedView(a.parent, _computeviewsize(a.size, I), _computeviewstrides(a.strides, I),
                 a.offset + _computeviewoffset(a.strides, I), a.op)
 end
@@ -74,7 +74,6 @@ Base.conj(a::StridedView) = StridedView(a.parent, a.size, a.strides, a.offset, _
     (length(p) == N && TupleTools.isperm(p)) ||
         throw(ArgumentError("Invalid permutation of length $N: $p"))
     newsize = TupleTools._permute(a.size, p)
-    # newstrides = _simplifystrides(TupleTools._permute(a.strides, p), newsize)
     newstrides = TupleTools._permute(a.strides, p)
     return StridedView(a.parent, newsize, newstrides, a.offset, a.op)
 end
@@ -99,11 +98,8 @@ Base.map(::FA, a::StridedView) =
 @inline function sreshape(a::StridedView, newsize::Dims)
     if any(isequal(0), newsize)
         any(isequal(0), size(a)) || throw(DimensionMismatch())
-        # newstrides = _simplifystrides(_defaultstrides(newsize), newsize)
         newstrides = one.(newsize)
     else
-        # newstrides = _simplifystrides(_computereshapestrides(newsize, size(a), strides(a)),
-        #                                 newsize)
         newstrides = _computereshapestrides(newsize, size(a), strides(a))
     end
     StridedView(a.parent, newsize, newstrides, a.offset, a.op)
