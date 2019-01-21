@@ -39,4 +39,17 @@ include("mapreduce.jl")
 include("broadcast.jl")
 include("macros.jl")
 
+function _precompile_()
+    ccall(:jl_generating_output, Cint, ()) == 1 || return nothing
+    for T in (Float32, Float64, ComplexF32, ComplexF64)
+        precompile(Tuple{typeof(_mul!), UnsafeStridedView{T, 2, T, typeof(Base.identity)}, UnsafeStridedView{T, 2, T, typeof(identity)}, UnsafeStridedView{T, 2, T, typeof(identity)}, Bool, Bool})
+        if T <: Complex
+            precompile(Tuple{typeof(_mul!), UnsafeStridedView{T, 2, T, typeof(Base.identity)}, UnsafeStridedView{T, 2, T, typeof(conj)}, UnsafeStridedView{T, 2, T, typeof(identity)}, Bool, Bool})
+            precompile(Tuple{typeof(_mul!), UnsafeStridedView{T, 2, T, typeof(Base.identity)}, UnsafeStridedView{T, 2, T, typeof(identity)}, UnsafeStridedView{T, 2, T, typeof(conj)}, Bool, Bool})
+            precompile(Tuple{typeof(_mul!), UnsafeStridedView{T, 2, T, typeof(Base.identity)}, UnsafeStridedView{T, 2, T, typeof(conj)}, UnsafeStridedView{T, 2, T, typeof(conj)}, Bool, Bool})
+        end
+    end
+end
+_precompile_()
+
 end
