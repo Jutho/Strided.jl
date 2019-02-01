@@ -6,17 +6,25 @@ struct StridedView{T,N,A<:DenseArray,F<:Union{FN,FC,FA,FT}} <: AbstractStridedVi
     offset::Int
     op::F
 end
-function StridedView(parent::A, size::NTuple{N,Int}, strides::NTuple{N,Int}, offset::Int,
-    op::F) where {A<:DenseArray, N, F}
+function StridedView(parent::Array{S},
+                        size::NTuple{N,Int} = size(parent),
+                        strides::NTuple{N,Int} = strides(parent),
+                        offset::Int = 0,
+                        op::F = identity) where {S, N, F}
+
+    T = Base.promote_op(op, S)
+    # reshape array to vector in order to reduce number of element types
+    StridedView{T,N,Vector{S},F}(reshape(parent, length(parent)), size, strides, offset, op)
+end
+function StridedView(parent::A,
+                        size::NTuple{N,Int} = size(parent),
+                        strides::NTuple{N,Int} = strides(parent),
+                        offset::Int = 0,
+                        op::F = identity) where {A<:DenseArray, N, F}
 
     T = Base.promote_op(op, eltype(parent))
     StridedView{T,N,A,F}(parent, size, strides, offset, op)
 end
-
-StridedView(a::A, size::NTuple{N,Int}, strides::NTuple{N,Int},
-                offset::Int = 0) where {T,N,A<:DenseArray{T}} =
-    StridedView{T,N,A,FN}(a, size, strides, offset, identity)
-StridedView(a::DenseArray) = StridedView(a, size(a), strides(a))
 StridedView(a::StridedView) = a
 
 StridedView(a::Adjoint) = StridedView(a')'

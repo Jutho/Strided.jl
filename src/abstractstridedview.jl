@@ -53,14 +53,40 @@ Base.permutedims!(dst::AbstractStridedView{<:Any,N}, src::AbstractStridedView{<:
 LinearAlgebra.rmul!(dst::AbstractStridedView, α::Number) = mul!(dst, dst, α)
 LinearAlgebra.lmul!(α::Number, dst::AbstractStridedView) = mul!(dst, α, dst)
 
-LinearAlgebra.mul!(dst::AbstractStridedView{<:Number,N}, α::Number, src::AbstractStridedView{<:Number,N}) where {N} =
-    α == 1 ? copyto!(dst, src) : map!(x->α*x, dst, src)
-LinearAlgebra.mul!(dst::AbstractStridedView{<:Number,N}, src::AbstractStridedView{<:Number,N}, α::Number) where {N} =
-    α == 1 ? copyto!(dst, src) : map!(x->x*α, dst, src)
-LinearAlgebra.axpy!(a::Number, X::AbstractStridedView{<:Number,N}, Y::AbstractStridedView{<:Number,N}) where {N} =
-    a == 1 ? map!(+, Y, X, Y) : map!((x,y)->(a*x+y), Y, X, Y)
-LinearAlgebra.axpby!(a::Number, X::AbstractStridedView{<:Number,N}, b::Number, Y::AbstractStridedView{<:Number,N}) where {N} =
-    b == 1 ? axpy!(a, X, Y) : (b == 0 ? mul!(Y, a, X) : map!((x,y)->(a*x+b*y), Y, X, Y))
+function LinearAlgebra.mul!(dst::AbstractStridedView{<:Number,N}, α::Number, src::AbstractStridedView{<:Number,N}) where {N}
+    if α == 1
+        copyto!(dst, src)
+    else
+        dst .= α .* src
+    end
+    return dst
+end
+function LinearAlgebra.mul!(dst::AbstractStridedView{<:Number,N}, src::AbstractStridedView{<:Number,N}, α::Number) where {N}
+    if α == 1
+        copyto!(dst, src)
+    else
+        dst .= src .* α
+    end
+    return dst
+end
+function LinearAlgebra.axpy!(a::Number, X::AbstractStridedView{<:Number,N}, Y::AbstractStridedView{<:Number,N}) where {N}
+    if a == 1
+        Y .= X .+ Y
+    else
+        Y .= a .* X .+ Y
+    end
+    return Y
+end
+function LinearAlgebra.axpby!(a::Number, X::AbstractStridedView{<:Number,N}, b::Number, Y::AbstractStridedView{<:Number,N}) where {N}
+    if b == 1
+        axpy!(a, X, Y)
+    elseif b == 0
+        mul!(Y, a, X)
+    else
+        Y .= a .* X .+ b .* Y
+    end
+    return Y
+end
 
 function LinearAlgebra.mul!(C::AbstractStridedView{T,2}, A::AbstractStridedView{<:Any,2}, B::AbstractStridedView{<:Any,2}, α = true, β = false) where {T}
     if !(eltype(C) <: LinearAlgebra.BlasFloat && eltype(A) == eltype(B) == eltype(C))

@@ -218,7 +218,9 @@ end
         @test_throws MethodError sview(B,:,[1,2,3],3,1:5)
 
         @test view(B,:,1:5,3,1:5) == view(A,:,1:5,3,1:5)
-        @test view(B,:,1:5,3,1:5) === sview(B,:,1:5,3,1:5) === SV(view(A,:,1:5,3,1:5)) === B[:,1:5,3,1:5]
+        @test view(B,:,1:5,3,1:5) === sview(B,:,1:5,3,1:5) === B[:,1:5,3,1:5]
+        @test view(B,:,1:5,3,1:5) == SV(view(A,:,1:5,3,1:5)) 
+        @test pointer(view(B,:,1:5,3,1:5)) == pointer(SV(view(A,:,1:5,3,1:5)))
         @test Strided.offset(view(B,:,1:5,3,1:5)) == 2*stride(B,3)
     end
 end
