@@ -28,6 +28,7 @@ UnsafeStridedView(a::Base.ReshapedArray) = sreshape(UnsafeStridedView(a.parent),
 # Methods for UnsafeStridedView
 Base.size(a::UnsafeStridedView) = a.size
 Base.strides(a::UnsafeStridedView) = a.strides
+Base.stride(a::UnsafeStridedView{<:Any, 0}, n::Int) = 1
 Base.stride(a::UnsafeStridedView{<:Any, N}, n::Int) where {N} =
     (n <= N) ? a.strides[n] : a.strides[N]*a.size[N]
 offset(a::UnsafeStridedView) = a.offset

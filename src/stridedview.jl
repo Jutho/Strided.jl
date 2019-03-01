@@ -35,6 +35,7 @@ StridedView(a::Base.ReshapedArray) = sreshape(StridedView(a.parent), a.dims)
 # Methods for StridedView
 Base.size(a::StridedView) = a.size
 Base.strides(a::StridedView) = a.strides
+Base.stride(a::StridedView{<:Any, 0}, n::Int) = 1
 Base.stride(a::StridedView{<:Any, N}, n::Int) where N =
     (n <= N) ? a.strides[n] : a.strides[N]*a.size[N]
 offset(a::StridedView) = a.offset
