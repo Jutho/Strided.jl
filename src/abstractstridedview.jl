@@ -253,41 +253,41 @@ _computeviewstrides(::Tuple{}, ::Tuple{}) = ()
 end
 _computeviewoffset(::Tuple{}, ::Tuple{}) = 0
 
-_computereshapestrides(newsize::Tuple{}, oldsize::Tuple{}, strides::Tuple{}) = ()
+_simplify(size::Tuple{}, strides::Tuple{}) = size, strides
+_simplify(size::Dims{1}, strides::Dims{1}) = size, strides
+function _simplify(size::Dims{N}, strides::Dims{N}) where {N}
+    tailsize, tailstrides = _simplify(tail(size), tail(strides))
+    laststride = tailstrides[end]
+    if size[1] == 1
+        return (tailsize..., 1), (tailstrides..., laststride)
+    elseif size[1]*strides[1] == tailstrides[1]
+        return (size[1]*tailsize[1], tail(tailsize)..., 1),
+            (strides[1], tail(tailstrides)..., laststride)
+    else
+        return (size[1], tailsize...), (strides[1], tailstrides...)
+    end
+end
+
 function _computereshapestrides(newsize::Tuple{}, oldsize::Dims{N}, strides::Dims{N}) where {N}
     all(isequal(1), oldsize) || throw(DimensionMismatch())
     return ()
 end
-function _computereshapestrides(newsize::Dims, oldsize::Tuple{}, strides::Tuple{})
-    all(isequal(1), newsize) || throw(DimensionMismatch())
-    return map(n->1, newsize)
-end
-function _computereshapestrides(newsize::Dims{1}, oldsize::Dims{1}, strides::Dims{1})
-    newsize[1] == oldsize[1] || throw(DimensionMismatch())
-    return (strides[1],)
-end
-function _computereshapestrides(newsize::Dims, oldsize::Dims{1}, strides::Dims{1})
-    newsize[1] == 1 && return (strides[1], _computereshapestrides(tail(newsize), oldsize, strides)...)
-
-    if newsize[1] <= oldsize[1]
-        d,r = divrem(oldsize[1], newsize[1])
-        r == 0 || throw(ReshapeException())
-
-        return (strides[1], _computereshapestrides(tail(newsize), (d,), (newsize[1]*strides[1],))...)
-    else
-        throw(DimensionMismatch())
-    end
-end
 function _computereshapestrides(newsize::Dims, oldsize::Dims{N}, strides::Dims{N}) where {N}
-    newsize[1] == 1 && return (strides[1], _computereshapestrides(tail(newsize), oldsize, strides)...)
-    oldsize[1] == 1 && return _computereshapestrides(newsize, tail(oldsize), tail(strides))
-
     d,r = divrem(oldsize[1], newsize[1])
     if r == 0
-        return (strides[1], _computereshapestrides(tail(newsize), (d, tail(oldsize)...), (newsize[1]*strides[1], tail(strides)...))...)
+        s1 = strides[1]
+        if d == 1
+            oldsize = (tail(oldsize)..., 1)
+            strides = (tail(strides)..., strides[end])
+            return (s1, _computereshapestrides(tail(newsize), oldsize, strides)...)
+        else
+            oldsize = (d, tail(oldsize)...)
+            strides = (newsize[1]*s1, tail(strides)...)
+            return (s1, _computereshapestrides(tail(newsize), oldsize, strides)...)
+        end
     else
-        if oldsize[1]*strides[1] == strides[2] || oldsize[2] == 1
-            return _computereshapestrides(newsize, (oldsize[1]*oldsize[2], TupleTools.tail2(oldsize)...), (strides[1], TupleTools.tail2(strides)...))
+        if prod(newsize) != prod(oldsize)
+            throw(DimensionMismatch())
         else
             throw(ReshapeException())
         end

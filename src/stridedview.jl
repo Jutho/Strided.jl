@@ -109,7 +109,7 @@ Base.map(::FA, a::StridedView) =
         any(isequal(0), size(a)) || throw(DimensionMismatch())
         newstrides = one.(newsize)
     else
-        newstrides = _computereshapestrides(newsize, size(a), strides(a))
+        newstrides = _computereshapestrides(newsize, _simplify(size(a), strides(a))...)
     end
     StridedView(a.parent, newsize, newstrides, a.offset, a.op)
 end
