@@ -31,7 +31,7 @@ Base.dotview(a::AbstractStridedView{<:Any,N}, I::Vararg{SliceIndex,N}) where {N}
     # promote AbstractStridedView to have same size, by giving artificial zero strides
     stridedargs = promoteshape(size(dest), capturestridedargs(bc)...)
     c = make_capture(bc)
-    _mapreducedim1!(c, nothing, nothing, size(dest), (dest, stridedargs...))
+    _mapreduce_fuse!(c, nothing, nothing, size(dest), (dest, stridedargs...))
     return dest
 end
 

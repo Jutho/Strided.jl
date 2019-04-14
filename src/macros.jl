@@ -5,11 +5,11 @@ end
 function _strided(ex::Expr)
     if ex.head == :call && ex.args[1] isa Symbol
         if ex.args[1] == :reshape
-            return Expr(:call, :(Strided.sreshape), _strided.(ex.args[2:end])...)
+            return Expr(:call, :(Strided.sreshape), map(_strided, ex.args[2:end])...)
         elseif ex.args[1] == :view
-            return Expr(:call, :(Strided.sview), _strided.(ex.args[2:end])...)
+            return Expr(:call, :(Strided.sview), map(_strided, ex.args[2:end])...)
         else
-            return Expr(:call, ex.args[1], _strided.(ex.args[2:end])...)
+            return Expr(:call, ex.args[1], map(_strided, ex.args[2:end])...)
         end
     elseif (ex.head == :(=) || ex.head == :(kw)) && ex.args[1] isa Symbol
         return Expr(ex.head, ex.args[1],
@@ -18,7 +18,7 @@ function _strided(ex::Expr)
         return Expr(ex.head, ex.args[1],
                     Expr(:call, :(Strided.maybeunstrided), _strided(ex.args[2])))
     else
-        return Expr(ex.head, _strided.(ex.args)...)
+        return Expr(ex.head, map(_strided, ex.args)...)
     end
 end
 const exclusionlist = Symbol[:(:)]

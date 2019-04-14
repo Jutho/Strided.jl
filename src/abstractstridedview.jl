@@ -298,7 +298,6 @@ function _computethreadedmulblocks end
 let
     mranges = Vector{UnitRange{Int}}(undef, Threads.nthreads())
     nranges = Vector{UnitRange{Int}}(undef, Threads.nthreads())
-    factors = simpleprimefactorization(Threads.nthreads())
     global _computethreadedmulblocks
     @inbounds function _computethreadedmulblocks(m,n)
         divm = 1

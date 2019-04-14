@@ -13,7 +13,6 @@ Base._mapreduce_dim(f, op, nt::NamedTuple{(:init,)}, A::AbstractStridedView, dim
 Base._mapreduce_dim(f, op, ::NamedTuple{()}, A::AbstractStridedView, dims) =
     Base.mapreducedim!(f, op, Base.reducedim_init(f, op, A, dims), A)
 
-
 function Base.map(f::F, a1::AbstractStridedView{<:Any,N},
         A::Vararg{AbstractStridedView{<:Any,N}}) where {F,N}
     T = Base.promote_eltype(a1, A...)
@@ -32,7 +31,7 @@ function Base.map!(f::F, b::AbstractStridedView{<:Any,N}, a1::AbstractStridedVie
 
     any(isequal(0), dims) && return b # don't do anything
 
-    _mapreducedim1!(f, nothing, nothing, dims, (b, a1, A...))
+    _mapreduce_fuse!(f, nothing, nothing, dims, (b, a1, A...))
 
     return b
 end
@@ -71,17 +70,17 @@ function _mapreducedim!(@nospecialize(f), @nospecialize(op), @nospecialize(inito
         dims::Dims, arrays::Tuple{Vararg{AbstractStridedView}})
     any(isequal(0), dims) && return arrays[1] # don't do anything
 
-    _mapreducedim1!(f, op, initop, dims, promoteshape(dims, arrays...))
+    _mapreduce_fuse!(f, op, initop, dims, promoteshape(dims, arrays...))
 
     return arrays[1]
 end
 
-function _mapreducedim1!(@nospecialize(f), @nospecialize(op), @nospecialize(initop),
-        dims::Dims{N}, arrays::Tuple{Vararg{AbstractStridedView}}) where {N}
-    # Level 1: fuse dimensions if possible: assume that at least one array, e.g. the output
+function _mapreduce_fuse!(@nospecialize(f), @nospecialize(op), @nospecialize(initop),
+        dims::Dims, arrays::Tuple{Vararg{AbstractStridedView}})
+    # Fuse dimensions if possible: assume that at least one array, e.g. the output
     # array in arrays[1], has its strides sorted
     allstrides = map(strides, arrays)
-    @inbounds for i = N:-1:2
+    @inbounds for i = length(dims):-1:2
         merge = true
         for s in allstrides
             if s[i] != dims[i-1]*s[i-1]
@@ -94,25 +93,10 @@ function _mapreducedim1!(@nospecialize(f), @nospecialize(op), @nospecialize(init
             dims = TupleTools.setindex(dims, 1, i)
         end
     end
-    _mapreducedim2!(f, op, initop, dims, allstrides, arrays)
-    return
+    _mapreduce_order!(f, op, initop, dims, allstrides, arrays)
 end
 
-function _mapreducedim2!(@nospecialize(f), @nospecialize(op), @nospecialize(initop), dims,
-        strides, arrays)
-    # Level 2: recursively delete dimensions of size 1
-    i = findfirst(isequal(1), dims)
-    if !(i isa Nothing)
-        newdims = TupleTools.deleteat(dims, i)
-        newstrides = broadcast(TupleTools.deleteat, strides, (i,))
-        _mapreducedim2!(f, op, initop, newdims, newstrides, arrays)
-    else
-        _mapreducedim_impl!(f, op, initop, dims, strides, arrays)
-    end
-    return
-end
-
-function _mapreducedim_impl!(@nospecialize(f), @nospecialize(op), @nospecialize(initop),
+function _mapreduce_order!(@nospecialize(f), @nospecialize(op), @nospecialize(initop),
         dims, strides, arrays)
     M = length(arrays)
     N = length(dims)
@@ -125,10 +109,15 @@ function _mapreducedim_impl!(@nospecialize(f), @nospecialize(op), @nospecialize(
         importance = importance .+ ( 1 .<< (g.*(N .- indexorder(strides[k]))))
     end
 
+    importance = importance .* (dims .> 1) # put dims 1 at the back
     p = TupleTools.sortperm(importance, rev = true)
-
     dims = TupleTools.getindices(dims, p)
     strides = broadcast(TupleTools.getindices, strides, (p,))
+    _mapreduce_block!(f, op, initop, dims, allstrides, arrays)
+end
+
+function _mapreduce_block!(@nospecialize(f), @nospecialize(op), @nospecialize(initop),
+        dims, strides, arrays)
     offsets = map(offset, arrays)
 
     if all(l -> l<=BLOCKSIZE, broadcast(_length, (dims,), strides))
@@ -136,11 +125,9 @@ function _mapreducedim_impl!(@nospecialize(f), @nospecialize(op), @nospecialize(
     else
         minstrides = map(min, strides...)
         mincosts = map(a->ifelse(iszero(a), 1, a << 1), minstrides)
-        # @show dims, minstrides, mincosts, strides
         blocks = _computeblocks(dims, mincosts, strides)
 
         if Threads.nthreads() == 1 || Threads.in_threaded_loop[] || prod(dims) < BLOCKSIZE
-            # @show dims, blocks, strides
             _mapreduce_kernel!(f, op, initop, dims, blocks, arrays, strides, offsets)
         elseif _length(dims, strides[1]) == 1 # complete reduction
             threadblocks, threadoffsets =
@@ -195,42 +182,107 @@ end
         @nospecialize(initop), dims::NTuple{N,Int}, blocks::NTuple{N,Int},
         arrays::NTuple{M,AbstractStridedView}, strides::NTuple{M,NTuple{N,Int}},
         offsets::NTuple{M,Int}) where {N,M}
-    blockloopvars = [Symbol("J$i") for i = 1:N]
-    blockdimvars = [Symbol("d$i") for i = 1:N]
-    innerloopvars = [Symbol("j$i") for i = 1:N]
-    initblockdimvars = [Symbol("d′$i") for i = 1:N]
 
-    stridevars = [Symbol("stride_$(i)_$(j)") for i = 1:N, j = 1:M]
-    Ivars = [Symbol("I$j") for j = 1:M]
-    Avars = [Symbol("A$j") for j = 1:M]
-    pre1 = Expr(:block, [:($(Avars[j]) = arrays[$j]) for j = 1:M]...)
-    pre2 = Expr(:block, [:($(stridevars[i,j]) = strides[$j][$i]) for i = 1:N, j=1:M]...)
-    pre3 = Expr(:block, [:($(Ivars[j]) = offsets[$j]+1) for j = 1:M]...)
+    # many variables
+    blockloopvars = Array{Symbol}(undef, N)
+    blockdimvars = Array{Symbol}(undef, N)
+    innerloopvars = Array{Symbol}(undef, N)
+    initblockdimvars = Array{Symbol}(undef, N)
+    initvars = Array{Symbol}(undef, N+1)
+    for i = 1:N
+        blockloopvars[i] = Symbol(:J,i)
+        blockdimvars[i] = Symbol(:d,i)
+        innerloopvars[i] = Symbol(:j,i)
+        initblockdimvars[i] = Symbol(:d′,i)
+        initvars[i] = Symbol(:init,i)
+    end
+    initvars[N+1] = Symbol(:init,N+1)
+
+    Ivars = Array{Symbol}(undef, M)
+    Avars = Array{Symbol}(undef, M)
+    stridevars = Array{Symbol}(undef, (N,M))
+    for j = 1:M
+        Ivars[j] = Symbol(:I,j)
+        Avars[j] = Symbol(:A,j)
+        for i = 1:N
+            stridevars[i,j] = Symbol(:stride_,i,:_,j)
+        end
+    end
+
+    # useful expressions
+    pre1ex = Expr(:block)
+    pre2ex = Expr(:block)
+    pre3ex = Expr(:block)
+    for j = 1:M
+        push!(pre1ex.args, :($(Avars[j]) = arrays[$j]))
+        push!(pre3ex.args, :($(Ivars[j]) = offsets[$j]+1))
+        for i = 1:N
+            push!(pre2ex.args, :($(stridevars[i,j]) = strides[$j][$i]))
+        end
+    end
+
+    fcallex = Expr(:call, :f)
+    for j = 2:M
+        push!(fcallex.args, :($(Avars[j])[ParentIndex($(Ivars[j]))]))
+    end
+    lhsex = :(A1[ParentIndex($(Ivars[1]))])
+
+    stepstride1ex = Vector{Expr}(undef, N)
+    stepstride2ex = Vector{Expr}(undef, N)
+    returnstride1ex = Vector{Expr}(undef, N)
+    returnstride2ex = Vector{Expr}(undef, N)
+    for i = 1:N
+        stepstride1ex[i] = :($(Ivars[1]) += $(stridevars[i,1]))
+        returnstride1ex[i] = :($(Ivars[1]) -=  $(blockdimvars[i]) * $(stridevars[i,1]))
+        stepex = Expr(:block)
+        returnex = Expr(:block)
+        for j = 2:M
+            push!(stepex.args, :($(Ivars[j]) += $(stridevars[i,j])))
+            push!(returnex.args, :($(Ivars[j]) -=  $(blockdimvars[i]) * $(stridevars[i,j])))
+        end
+        stepstride2ex[i] = stepex
+        returnstride2ex[i] = returnex
+    end
+
+    outerstepstrideex = Vector{Expr}(undef, N)
+    outerreturnstrideex = Vector{Expr}(undef, N)
+    for i = 1:N
+        stepex = Expr(:block)
+        returnex = Expr(:block)
+        for j = 1:M
+            push!(stepex.args, :($(Ivars[j]) +=  $(blockdimvars[i]) * $(stridevars[i,j])))
+            push!(returnex.args, :($(Ivars[j]) -=  dims[$i] * $(stridevars[i,j])))
+        end
+        outerstepstrideex[i] = stepex
+        outerreturnstrideex[i] = returnex
+    end
 
     if op == Nothing
-        ex = :(A1[ParentIndex($(Ivars[1]))] = f($([:($(Avars[j])[ParentIndex($(Ivars[j]))]) for j = 2:M]...)))
-        exa = :(a = f($([:($(Avars[j])[ParentIndex($(Ivars[j]))]) for j = 2:M]...)))
+        ex = Expr(:(=), lhsex, fcallex)
+        exa = Expr(:(=), :a, fcallex)
     else
-        ex = :(A1[ParentIndex($(Ivars[1]))] = op(A1[ParentIndex($(Ivars[1]))], f($([:($(Avars[j])[ParentIndex($(Ivars[j]))]) for j = 2:M]...))))
-        exa = :(a = op(a, f($([:($(Avars[j])[ParentIndex($(Ivars[j]))]) for j = 2:M]...))))
+        ex = Expr(:(=), lhsex, Expr(:call, :op, lhsex, fcallex))
+        exa = Expr(:(=), :a, Expr(:call, :op, :a, fcallex))
     end
     i = 1
     if N >= 1
         ex = quote
             if $(stridevars[1,1]) == 0 # explicitly hoist A1[I1] out of loop
-                a = A1[ParentIndex($(Ivars[1]))]
+                a = $lhsex
                 @simd for $(innerloopvars[i]) = Base.OneTo($(blockdimvars[i]))
                     $exa
-                    $(Expr(:block, [:($(Ivars[j]) += $(stridevars[i,j])) for j = 2:M]...))
+                    $(stepstride2ex[i])
                 end
-                A1[ParentIndex($(Ivars[1]))] = a
-                $(Expr(:block, [:($(Ivars[j]) -=  $(blockdimvars[i]) * $(stridevars[i,j])) for j = 2:M]...))
+                $lhsex = a
+                $(returnstride2ex[i])
             else
                 @simd for $(innerloopvars[i]) = Base.OneTo($(blockdimvars[i]))
                     $ex
-                    $(Expr(:block, [:($(Ivars[j]) += $(stridevars[i,j])) for j = 1:M]...))
+                    $(stepstride1ex[i])
+                    $(stepstride2ex[i])
                 end
-                $(Expr(:block, [:($(Ivars[j]) -=  $(blockdimvars[i]) * $(stridevars[i,j])) for j = 1:M]...))
+                $(returnstride1ex[i])
+                $(returnstride2ex[i])
             end
         end
     end
@@ -238,32 +290,33 @@ end
         ex = quote
             for $(innerloopvars[i]) = Base.OneTo($(blockdimvars[i]))
                 $ex
-                $(Expr(:block, [:($(Ivars[j]) += $(stridevars[i,j])) for j = 1:M]...))
+                $(stepstride1ex[i])
+                $(stepstride2ex[i])
             end
-            $(Expr(:block, [:($(Ivars[j]) -=  $(blockdimvars[i]) * $(stridevars[i,j])) for j = 1:M]...))
+            $(returnstride1ex[i])
+            $(returnstride2ex[i])
         end
     end
 
-    initvars = [Symbol("init$i") for i = 1:N+1]
     if initop !== Nothing
-        initex = :(A1[ParentIndex($(Ivars[1]))] = initop(A1[ParentIndex($(Ivars[1]))]))
+        initex = Expr(:(=), lhsex, Expr(:call, :initop, lhsex))
         i = 1
         if N >= 1
             initex = quote
-                $(initblockdimvars[i]) = $(stridevars[i,1]) == 0 ? 1 : $(blockdimvars[i])
+                $(initblockdimvars[i]) = ifelse($(stridevars[i,1]) == 0, 1, $(blockdimvars[i]))
                 @simd for $(innerloopvars[i]) in Base.OneTo($(initblockdimvars[i]))
                     $initex
-                    $(Ivars[1]) += $(stridevars[i,1])
+                    $(stepstride1ex[i])
                 end
                 $(Ivars[1]) -=  $(initblockdimvars[i]) * $(stridevars[i,1])
             end
         end
         for outer i = 2:N
             initex = quote
-                $(initblockdimvars[i]) = $(stridevars[i,1]) == 0 ? 1 : $(blockdimvars[i])
+                $(initblockdimvars[i]) = ifelse($(stridevars[i,1]) == 0, 1, $(blockdimvars[i]))
                 for $(innerloopvars[i]) in Base.OneTo($(initblockdimvars[i]))
                     $initex
-                    $(Ivars[1]) += $(stridevars[i,1])
+                    $(stepstride1ex[i])
                 end
                 $(Ivars[1]) -=  $(initblockdimvars[i]) * $(stridevars[i,1])
             end
@@ -282,15 +335,15 @@ end
                 for $(blockloopvars[i]) = 1:blocks[$i]:dims[$i]
                     $(blockdimvars[i]) = min(blocks[$i], dims[$i]-$(blockloopvars[i])+1)
                     $ex
-                    $(Expr(:block, [:($(Ivars[j]) +=  $(blockdimvars[i]) * $(stridevars[i,j])) for j = 1:M]...))
+                    $(outerstepstrideex[i])
                 end
-                $(Expr(:block, [:($(Ivars[j]) -=  dims[$i] * $(stridevars[i,j])) for j = 1:M]...))
+                $(outerreturnstrideex[i])
             end
         end
         ex = quote
-            $pre1
-            $pre2
-            $pre3
+            $pre1ex
+            $pre2ex
+            $pre3ex
             @inbounds $ex
             return A1
         end
@@ -302,15 +355,15 @@ end
                     $(blockdimvars[i]) = min(blocks[$i], dims[$i]-$(blockloopvars[i])+1)
                     $ex
                     $(initvars[i]) &= $(stridevars[i,1]) > 0
-                    $(Expr(:block, [:($(Ivars[j]) +=  $(blockdimvars[i]) * $(stridevars[i,j])) for j = 1:M]...))
+                    $(outerstepstrideex[i])
                 end
-                $(Expr(:block, [:($(Ivars[j]) -=  dims[$i] * $(stridevars[i,j])) for j = 1:M]...))
+                $(outerreturnstrideex[i])
             end
         end
         ex = quote
-            $pre1
-            $pre2
-            $pre3
+            $pre1ex
+            $pre2ex
+            $pre3ex
             $(initvars[N+1]) = true
             @inbounds $ex
             return A1
@@ -371,12 +424,6 @@ function _computeblocks(dims::NTuple{N,Int}, costs::NTuple{N,Int}, strides::Tupl
     end
 end
 
-const factors = []
-function __init__()
-    f = reverse!(simpleprimefactorization(Threads.nthreads()))
-    resize!(factors, length(f))
-    copyto!(factors, f)
-end
 @inbounds function _computethreadblocks(dims::NTuple{N,Int}, costs::NTuple{N,Int}, strides::NTuple{M,NTuple{N,Int}}, offsets::NTuple{M,Int}) where {N,M}
     threadblocks = [dims]
     threadoffsets = [offsets]
@@ -389,6 +436,7 @@ end
             if costs[i] == 0
                 push!(threadblocks, dims)
                 push!(threadoffsets, offsets)
+                println(threadblocks)
                 return threadblocks, threadoffsets
             end
             ndi = div(dims[i], k)
@@ -405,5 +453,6 @@ end
             push!(threadoffsets, offsets)
         end
     end
+    println(threadblocks)
     return threadblocks, threadoffsets
 end
