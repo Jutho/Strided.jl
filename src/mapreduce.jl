@@ -155,7 +155,6 @@ function _mapreduce_block!(@nospecialize(f), @nospecialize(op), @nospecialize(in
 
             threadblocks, threadoffsets =
                 _computethreadblocks(dims, mincosts, strides, offsets)
-            # @show threadblocks, threadoffsets
             _mapreduce_threaded!(threadblocks, threadoffsets, f, op, initop, blocks,
                 arrays, strides)
         end
@@ -436,7 +435,6 @@ end
             if costs[i] == 0
                 push!(threadblocks, dims)
                 push!(threadoffsets, offsets)
-                println(threadblocks)
                 return threadblocks, threadoffsets
             end
             ndi = div(dims[i], k)
@@ -453,6 +451,5 @@ end
             push!(threadoffsets, offsets)
         end
     end
-    println(threadblocks)
     return threadblocks, threadoffsets
 end
