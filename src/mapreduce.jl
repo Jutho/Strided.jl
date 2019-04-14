@@ -113,7 +113,7 @@ function _mapreduce_order!(@nospecialize(f), @nospecialize(op), @nospecialize(in
     p = TupleTools.sortperm(importance, rev = true)
     dims = TupleTools.getindices(dims, p)
     strides = broadcast(TupleTools.getindices, strides, (p,))
-    _mapreduce_block!(f, op, initop, dims, allstrides, arrays)
+    _mapreduce_block!(f, op, initop, dims, strides, arrays)
 end
 
 function _mapreduce_block!(@nospecialize(f), @nospecialize(op), @nospecialize(initop),
