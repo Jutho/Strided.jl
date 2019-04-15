@@ -257,12 +257,11 @@ _simplify(size::Tuple{}, strides::Tuple{}) = size, strides
 _simplify(size::Dims{1}, strides::Dims{1}) = size, strides
 function _simplify(size::Dims{N}, strides::Dims{N}) where {N}
     tailsize, tailstrides = _simplify(tail(size), tail(strides))
-    laststride = tailstrides[end]
     if size[1] == 1
-        return (tailsize..., 1), (tailstrides..., laststride)
+        return (tailsize..., 1), (tailstrides..., strides[1])
     elseif size[1]*strides[1] == tailstrides[1]
         return (size[1]*tailsize[1], tail(tailsize)..., 1),
-            (strides[1], tail(tailstrides)..., laststride)
+            (strides[1], tail(tailstrides)..., tailsize[1]*tailstrides[1])
     else
         return (size[1], tailsize...), (strides[1], tailstrides...)
     end
@@ -278,7 +277,7 @@ function _computereshapestrides(newsize::Dims, oldsize::Dims{N}, strides::Dims{N
         s1 = strides[1]
         if d == 1
             oldsize = (tail(oldsize)..., 1)
-            strides = (tail(strides)..., strides[end])
+            strides = (tail(strides)..., newsize[1]*s1)
             return (s1, _computereshapestrides(tail(newsize), oldsize, strides)...)
         else
             oldsize = (d, tail(oldsize)...)
