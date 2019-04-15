@@ -33,6 +33,15 @@ Base.stride(a::UnsafeStridedView{<:Any, N}, n::Int) where {N} =
     (n <= N) ? a.strides[n] : a.strides[N]*a.size[N]
 offset(a::UnsafeStridedView) = a.offset
 
+function blasstrides(a::UnsafeStridedView{<:Any,2})
+    # canonialize strides to make compatible with gemm
+    if size(a, 2) == 1 && stride(a, 1) == 1
+        return UnsafeStridedView(a.ptr, a.size, (1, size(a,1)), a.offset, a.op)
+    else
+        return a
+    end
+end
+
 Base.similar(a::UnsafeStridedView, ::Type{T}, dims::NTuple{N,Int}) where {N,T} =
     StridedView(Array{T}(undef, dims))
 Base.copy(a::UnsafeStridedView) = copyto!(similar(a), a)

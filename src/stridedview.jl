@@ -40,6 +40,15 @@ Base.stride(a::StridedView{<:Any, N}, n::Int) where N =
     (n <= N) ? a.strides[n] : a.strides[N]*a.size[N]
 offset(a::StridedView) = a.offset
 
+function blasstrides(a::StridedView{<:Any,2})
+    # canonialize strides to make compatible with gemm
+    if size(a, 2) == 1 && stride(a, 1) == 1
+        return StridedView(a.parent, a.size, (1, size(a,1)), a.offset, a.op)
+    else
+        return a
+    end
+end
+
 Base.similar(a::StridedView, ::Type{T}, dims::NTuple{N,Int}) where {N,T} =
     StridedView(similar(a.parent, T, dims))
 Base.copy(a::StridedView) = copyto!(similar(a), a)

@@ -136,14 +136,6 @@ function getblasmatrix(A::AbstractStridedView{T,2}) where {T<:LinearAlgebra.Blas
         return blasstrides(adjoint(A)), 'C'
     end
 end
-function blasstrides(A::AbstractStridedView{T,2}) where {T}
-    # canonialize strides to make compatible with gemm
-    if size(A, 2) == 1
-        return sreshape(A, size(A)) # will reset A.strides[2] == A.strides[1]*A.size[1]
-    else
-        return A
-    end
-end
 
 # here we will have C.op == :identity && stride(C,1) < stride(C,2)
 function _mul!(C::AbstractStridedView{T,2}, A::AbstractStridedView{T,2}, B::AbstractStridedView{T,2}, α, β) where {T<:LinearAlgebra.BlasFloat}
@@ -267,9 +259,15 @@ function _simplify(size::Dims{N}, strides::Dims{N}) where {N}
     end
 end
 
+_computereshapestrides(newsize::Tuple{}, oldsize::Tuple{}, strides::Tuple{}) = strides
 function _computereshapestrides(newsize::Tuple{}, oldsize::Dims{N}, strides::Dims{N}) where {N}
     all(isequal(1), oldsize) || throw(DimensionMismatch())
     return ()
+end
+
+function _computereshapestrides(newsize::Dims, oldsize::Tuple{}, strides::Tuple{})
+    all(isequal(1), newsize) || throw(DimensionMismatch())
+    return newsize
 end
 function _computereshapestrides(newsize::Dims, oldsize::Dims{N}, strides::Dims{N}) where {N}
     d,r = divrem(oldsize[1], newsize[1])
