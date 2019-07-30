@@ -130,21 +130,23 @@ function _mapreduce_block!(@nospecialize(f), @nospecialize(op), @nospecialize(in
         if Threads.nthreads() == 1 || Threads.in_threaded_loop[] || prod(dims) < BLOCKSIZE
             _mapreduce_kernel!(f, op, initop, dims, blocks, arrays, strides, offsets)
         elseif _length(dims, strides[1]) == 1 # complete reduction
+            T = eltype(arrays[1])
+            spacing = isbitstype(T) ? min(1, div(64, sizeof(T))) : 1# to avoid false sharing
             threadblocks, threadoffsets =
                 _computethreadblocks(dims, mincosts, strides, offsets)
-            threadedout = similar(arrays[1], length(threadblocks))
+            threadedout = similar(arrays[1], spacing*length(threadblocks))
             a = arrays[1][ParentIndex(1)]
             if initop !== nothing
                 a = initop(a)
             end
             _init_reduction!(threadedout, f, op, a)
             for i = 1:length(threadoffsets)
-                threadoffsets[i] = (i-1, Base.tail(threadoffsets[i])...)
+                threadoffsets[i] = (spacing*(i-1), Base.tail(threadoffsets[i])...)
             end
             _mapreduce_threaded!(threadblocks, threadoffsets, f, op, nothing, blocks,
                 (threadedout, Base.tail(arrays)...), strides)
             for i = 1:length(threadblocks)
-                a = op(a, threadedout[i])
+                a = op(a, threadedout[(i-1)*spacing+1])
             end
             arrays[1][ParentIndex(1)] = a
         else

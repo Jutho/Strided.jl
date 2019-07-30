@@ -1,5 +1,6 @@
-## Documentation: http://docs.travis-ci.com/user/languages/julia/
+# Documentation: http://docs.travis-ci.com/user/languages/julia/
 language: julia
+
 os:
   - linux
   - osx
@@ -8,22 +9,16 @@ julia:
   - 1.1
   - 1.2
   - nightly
+env:
+  - JULIA_NUM_THREADS=1
+  - JULIA_NUM_THREADS=4
+
 notifications:
   email: false
-git:
-  depth: 99999999
 
-## uncomment the following lines to allow failures on nightly julia
-## (tests will run but not make your overall status red)
 matrix:
  allow_failures:
  - julia: nightly
 
-env:
-  matrix:
-    - JULIA_NUM_THREADS=1
-    - JULIA_NUM_THREADS=4
-
-after_success:
-  # push coverage results to CodeCov and Coveralls
-  - julia -e 'using Pkg; Pkg.add("Coverage"); using Coverage; Codecov.submit(Codecov.process_folder()); Coveralls.submit(Coveralls.process_folder())'
+codecov: true
+coveralls: true
