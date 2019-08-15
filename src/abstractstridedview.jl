@@ -88,7 +88,7 @@ function LinearAlgebra.axpby!(a::Number, X::AbstractStridedView{<:Number,N}, b::
     return Y
 end
 
-function LinearAlgebra.mul!(C::AbstractStridedView{T,2}, A::AbstractStridedView{<:Any,2}, B::AbstractStridedView{<:Any,2}, α = true, β = false) where {T}
+function LinearAlgebra.mul!(C::AbstractStridedView{T,2}, A::AbstractStridedView{<:Any,2}, B::AbstractStridedView{<:Any,2}, α::Number = true, β::Number = false) where {T}
     if !(eltype(C) <: LinearAlgebra.BlasFloat && eltype(A) == eltype(B) == eltype(C))
         return __mul!(C, A, B, α, β)
     end
