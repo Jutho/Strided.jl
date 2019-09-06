@@ -127,7 +127,7 @@ function _mapreduce_block!(@nospecialize(f), @nospecialize(op), @nospecialize(in
         mincosts = map(a->ifelse(iszero(a), 1, a << 1), minstrides)
         blocks = _computeblocks(dims, mincosts, strides)
 
-        if Threads.nthreads() == 1 || Threads.in_threaded_loop[] || prod(dims) < BLOCKSIZE
+        if Threads.nthreads() == 1 || prod(dims) < BLOCKSIZE
             _mapreduce_kernel!(f, op, initop, dims, blocks, arrays, strides, offsets)
         elseif _length(dims, strides[1]) == 1 # complete reduction
             T = eltype(arrays[1])
