@@ -3,7 +3,9 @@ macro strided(ex)
 end
 
 function _strided(ex::Expr)
-    if ex.head == :call && ex.args[1] isa Symbol
+    if ex.head == :. && ex.args[2] isa QuoteNode # field access: wrap whole expression in maybestrided
+        return Expr(:call, :(Strided.maybestrided), ex)
+    elseif ex.head == :call && ex.args[1] isa Symbol
         if ex.args[1] == :reshape
             return Expr(:call, :(Strided.sreshape), map(_strided, ex.args[2:end])...)
         elseif ex.args[1] == :view
