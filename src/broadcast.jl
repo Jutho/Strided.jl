@@ -15,8 +15,8 @@ Broadcast.BroadcastStyle(::StridedArrayStyle{N}, a::DefaultArrayStyle) where {N}
 Broadcast.BroadcastStyle(::StridedArrayStyle{N}, ::Broadcast.Style{Tuple}) where {N} =
     DefaultArrayStyle{N}()
 
-function Base.similar(bc::Broadcasted{<:StridedArrayStyle{N}}, eltype::T) where {N,T}
-    StridedView(similar(convert(Broadcasted{DefaultArrayStyle{N}}, bc), eltype))
+function Base.similar(bc::Broadcasted{<:StridedArrayStyle{N}}, ::Type{T}) where {N,T}
+    StridedView(similar(convert(Broadcasted{DefaultArrayStyle{N}}, bc), T))
 end
 
 Base.dotview(a::AbstractStridedView{<:Any,N}, I::Vararg{SliceIndex,N}) where {N} =
