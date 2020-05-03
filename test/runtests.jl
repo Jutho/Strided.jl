@@ -219,7 +219,7 @@ end
 
         @test view(B,:,1:5,3,1:5) == view(A,:,1:5,3,1:5)
         @test view(B,:,1:5,3,1:5) === sview(B,:,1:5,3,1:5) === B[:,1:5,3,1:5]
-        @test view(B,:,1:5,3,1:5) == SV(view(A,:,1:5,3,1:5)) 
+        @test view(B,:,1:5,3,1:5) == SV(view(A,:,1:5,3,1:5))
         @test pointer(view(B,:,1:5,3,1:5)) == pointer(SV(view(A,:,1:5,3,1:5)))
         @test Strided.offset(view(B,:,1:5,3,1:5)) == 2*stride(B,3)
     end
@@ -386,6 +386,7 @@ end
     @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
         A1, A2, A3 = rand(T, (10,)), rand(T, (10,10)), rand(T, (10,10,10))
 
+        @test (@strided(@. A1 + sin(A2 - 3))) isa StridedView
         @test (@strided(A1 .+ sin.(A2 .- 3))) isa StridedView
         @test (@strided(A1 .+ sin.(A2 .- 3))) ≈ A1 .+ sin.(A2 .- 3)
         @test (@strided(A2' .* A3 .- Ref(0.5))) ≈ A2' .* A3 .- Ref(0.5)
@@ -435,6 +436,7 @@ end
     @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
         A1, A2, A3 = rand(T, (10,)), rand(T, (10,10)), rand(T, (10,10,10))
 
+        @test (@unsafe_strided(A1,A2,@. A1 + sin(A2 - 3))) isa StridedView
         @test (@unsafe_strided(A1,A2,A1 .+ sin.(A2 .- 3))) isa StridedView
 
         @test (@unsafe_strided(A1,A2,A1 .+ sin.(A2 .- 3))) ≈ A1 .+ sin.(A2 .- 3)
