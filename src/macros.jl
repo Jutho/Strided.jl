@@ -1,4 +1,5 @@
 macro strided(ex)
+    ex = macroexpand(__module__, ex)
     esc(_strided(ex))
 end
 
@@ -35,7 +36,7 @@ maybeunstrided(A) = A
 
 macro unsafe_strided(args...)
     syms = args[1:end-1]
-    ex = args[end]#_strided(args[end])
+    ex = macroexpand(__module__, args[end]) #_strided(args[end])
     all(isa(s, Symbol) for s in syms) ||
         error("The first arguments to `@unsafe_strided` must be variable names")
     ex = Expr(:let, Expr(:block, [:($s = Strided.UnsafeStridedView($s)) for s in syms]...), ex)
@@ -45,6 +46,6 @@ end
 # macro sfor(args...)
 #     syms = args[1:end-1]
 #     all(isa(s, Symbol) for s in syms) || error("The first arguments to `@sfor` must be variable names that will be usek")
-#     ex = args[end]
+#     ex = macroexpand(__module__, args[end])
 #     ex = _sfor(syms, ex)
 # end
