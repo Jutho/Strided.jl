@@ -16,6 +16,30 @@ export StridedView, @strided, @unsafe_strided, sreshape, sview
 #     Threads.nthreads() == 1 && warn("Strided disables BLAS multithreading, enable Julia threading (`export JULIA_NUM_THREADS = N`) to benefit from multithreaded matrix multiplication and more")
 # end
 
+const _use_threads = Ref(true)
+use_threads() = _use_threads[]
+
+"""
+    disable_threads()
+
+Disable the use of threading in Strided.
+Also see [`enable_threads()`](@ref)
+"""
+function disable_threads()
+    _use_threads[] = false
+    return
+end
+
+"""
+    enable_threads()
+
+(Re)-enable threading in Strided.
+"""
+function enable_threads()
+    _use_threads[] = true
+    return
+end
+
 # used to factor the number of threads
 function simpleprimefactorization(n::Int)
     factors = Vector{Int}()
