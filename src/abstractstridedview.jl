@@ -102,18 +102,37 @@ function LinearAlgebra.mul!(C::AbstractStridedView{T,2}, A::AbstractStridedView{
     elseif stride(C,1) > stride(C,2)
         _mul!(transpose(C), transpose(B), transpose(A), α, β)
     else
-        _mul!(C, A, B, α, β)
-        # EXPERIMENTAL: only use in combination with BLAS.set_num_threads(1)
-        # if Threads.nthreads() == 1 || Threads.in_threaded_loop[] || prod(size(C)) < Threads.nthreads()*1024
-        #     _mul!(C, A, B)
-        # else
-        #     mranges, nranges = _computethreadedmulblocks(size(C,1), size(C,2))
-        #     @inbounds Threads.@threads for i = 1:Threads.nthreads()
-        #         _mul!(C[mranges[i], nranges[i]], A[mranges[i], :], B[ :, nranges[i]])
-        #     end
-        # end
+        if use_threaded_mul()
+            _threaded_mul!(C, A, B, α, β, _nthreads())
+        else
+            _mul!(C, A, B, α, β)
+        end
     end
     return C
+end
+
+function _threaded_mul!(C::AbstractStridedView{<:Any,2}, A::AbstractStridedView{<:Any,2}, B::AbstractStridedView{<:Any,2}, α, β, nthreads)
+    m, n = size(C)
+    m == size(A, 1) && n == size(B, 2) || throw(DimensionMismatch())
+    if nthreads == 1 || m*n < 1024
+        _mul!(C, A, B, α, β)
+    else
+        if m > n
+            m2 = m >> 1
+            nthreads2 = nthreads >> 1
+            t = Threads.@spawn _threaded_mul!(C[1:m2, :], A[1:m2, :], B, α, β, nthreads2)
+            _threaded_mul!(C[m2+1:m, :], A[m2+1:m, :], B, α, β, nthreads - nthreads2)
+            wait(t)
+            return C
+        else
+            n2 = n >> 1
+            nthreads2 = nthreads >> 1
+            t = Threads.@spawn _threaded_mul!(C[:, 1:n2], A, B[:, 1:n2], α, β, nthreads2)
+            _threaded_mul!(C[:, n2+1:n], A, B[:, n2+1:n], α, β, nthreads - nthreads2)
+            wait(t)
+            return C
+        end
+    end
 end
 
 function isblasmatrix(A::AbstractStridedView{T,2}) where {T<:LinearAlgebra.BlasFloat}
@@ -288,43 +307,5 @@ function _computereshapestrides(newsize::Dims, oldsize::Dims{N}, strides::Dims{N
         else
             throw(ReshapeException())
         end
-    end
-end
-
-function _computethreadedmulblocks end
-let
-    mranges = Vector{UnitRange{Int}}(undef, Threads.nthreads())
-    nranges = Vector{UnitRange{Int}}(undef, Threads.nthreads())
-    global _computethreadedmulblocks
-    @inbounds function _computethreadedmulblocks(m,n)
-        divm = 1
-        divn = 1
-        for i = length(factors):-1:1
-            if m*divn > n*divm
-                divm *= factors[i]
-            else
-                divn *= factors[i]
-            end
-        end
-        bm, rm = divrem(m, divm)
-        bn, rn = divrem(n, divn)
-        moffset = 0
-        noffset = 0
-
-        for i = 1:divm
-            mnew = moffset + bm + ifelse(rm >= i, 1, 0)
-            for j = 1:divn
-                mranges[i+(j-1)*divm] = (moffset+1):(mnew)
-            end
-            moffset = mnew
-        end
-        for j = 1:divn
-            nnew = noffset + bn + ifelse(rn >= j, 1, 0)
-            for i = 1:divm
-                nranges[i+(j-1)*divm] = (noffset+1):(nnew)
-            end
-            noffset = nnew
-        end
-        return mranges, nranges
     end
 end

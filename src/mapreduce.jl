@@ -113,53 +113,46 @@ function _mapreduce_order!(@nospecialize(f), @nospecialize(op), @nospecialize(in
     p = TupleTools.sortperm(importance, rev = true)
     dims = TupleTools.getindices(dims, p)
     strides = broadcast(TupleTools.getindices, strides, (p,))
-    _mapreduce_block!(f, op, initop, dims, strides, arrays)
+    offsets = map(offset, arrays)
+    costs = map(a->ifelse(iszero(a), 1, a << 1), map(min, strides...))
+    _mapreduce_block!(f, op, initop, dims, strides, offsets, costs, arrays)
 end
 
 function _mapreduce_block!(@nospecialize(f), @nospecialize(op), @nospecialize(initop),
-        dims, strides, arrays)
-    offsets = map(offset, arrays)
+        dims, strides, offsets, costs, arrays)
 
-    if all(l -> l<=BLOCKSIZE, broadcast(_length, (dims,), strides))
-        _mapreduce_kernel!(f, op, initop, dims, dims, arrays, strides, offsets)
-    else
-        minstrides = map(min, strides...)
-        mincosts = map(a->ifelse(iszero(a), 1, a << 1), minstrides)
-        blocks = _computeblocks(dims, mincosts, strides)
+    bytestrides = map((s, stride)-> s.*stride, sizeof.(eltype.(arrays)), strides)
+    strideorders = map(indexorder, strides)
+    blocks = _computeblocks(dims, costs, bytestrides, strideorders)
+    # t = @elapsed _computeblocks(dims, costs, bytestrides, strideorders)
+    # println("_computeblocks time: $t")
 
-        if Threads.nthreads() == 1 || !use_threads() || prod(dims) < BLOCKSIZE
-            _mapreduce_kernel!(f, op, initop, dims, blocks, arrays, strides, offsets)
-        elseif _length(dims, strides[1]) == 1 # complete reduction
-            T = eltype(arrays[1])
-            spacing = isbitstype(T) ? min(1, div(64, sizeof(T))) : 1# to avoid false sharing
-            threadblocks, threadoffsets =
-                _computethreadblocks(dims, mincosts, strides, offsets)
-            threadedout = similar(arrays[1], spacing*length(threadblocks))
-            a = arrays[1][ParentIndex(1)]
-            if initop !== nothing
-                a = initop(a)
-            end
-            _init_reduction!(threadedout, f, op, a)
-            for i = 1:length(threadoffsets)
-                threadoffsets[i] = (spacing*(i-1), Base.tail(threadoffsets[i])...)
-            end
-            _mapreduce_threaded!(threadblocks, threadoffsets, f, op, nothing, blocks,
-                (threadedout, Base.tail(arrays)...), strides)
-            for i = 1:length(threadblocks)
-                a = op(a, threadedout[(i-1)*spacing+1])
-            end
-            arrays[1][ParentIndex(1)] = a
-        else
-            mincosts = mincosts .* .!(iszero.(strides[1]))
-            # make cost of dimensions with zero stride in output array (reduction
-            # dimensions), so that they are not divided in threading (which would lead to
-            # race errors)
-
-            threadblocks, threadoffsets =
-                _computethreadblocks(dims, mincosts, strides, offsets)
-            _mapreduce_threaded!(threadblocks, threadoffsets, f, op, initop, blocks,
-                arrays, strides)
+    if _nthreads() == 1
+        _mapreduce_kernel!(f, op, initop, dims, blocks, arrays, strides, offsets)
+    elseif _length(dims, strides[1]) == 1 # complete reduction
+        T = eltype(arrays[1])
+        spacing = isbitstype(T) ? min(1, div(64, sizeof(T))) : 1# to avoid false sharing
+        threadedout = similar(arrays[1], spacing*_nthreads())
+        a = arrays[1][ParentIndex(1)]
+        if initop !== nothing
+            a = initop(a)
         end
+        _init_reduction!(threadedout, f, op, a)
+
+        newarrays = (threadedout, Base.tail(arrays)...)
+        _mapreduce_threaded!(f, op, nothing, dims, blocks, strides, offsets, costs, newarrays, _nthreads(), spacing)
+
+        for i = 1:_nthreads()
+            a = op(a, threadedout[(i-1)*spacing+1])
+        end
+        arrays[1][ParentIndex(1)] = a
+    else
+        costs = costs .* .!(iszero.(strides[1]))
+        # make cost of dimensions with zero stride in output array (reduction
+        # dimensions), so that they are not divided in threading (which would lead to
+        # race conditions)
+
+        _mapreduce_threaded!(f, op, initop, dims, blocks, strides, offsets, costs, arrays, _nthreads(), 0)
     end
     return
 end
@@ -172,11 +165,37 @@ _init_reduction!(out, f, op::typeof(&), a) = fill!(out, true)
 _init_reduction!(out, f, op::typeof(|), a) = fill!(out, false)
 _init_reduction!(out, f, op, a) = op(a,a) == a ? fill!(out, a) : error("unknown reduction; incompatible with multithreading")
 
-@noinline function _mapreduce_threaded!(threadblocks, threadoffsets, f, op, initop, blocks, arrays, strides)
-    @inbounds Threads.@threads for i = 1:length(threadblocks)
-        _mapreduce_kernel!(f, op, initop, threadblocks[i], blocks, arrays, strides,
-            threadoffsets[i])
+# nthreads: number of threads
+# spacing: extra addition to offset of array 1, to account for reduction
+function _mapreduce_threaded!(@nospecialize(f), @nospecialize(op), @nospecialize(initop),
+        dims, blocks, strides, offsets, costs, arrays, nthreads, spacing)
+
+    if nthreads == 1
+        offset1 = offsets[1] + spacing * (Threads.threadid()-1)
+        spacedoffsets = (offset1, Base.tail(offsets)...)
+        _mapreduce_kernel!(f, op, initop, dims, blocks, arrays, strides, spacedoffsets)
+    else
+        i = _lastargmax((dims .- 1) .* costs)
+        if costs[i] == 0 || dims[i] <= min(blocks[i], 1024)
+            offset1 = offsets[1] + spacing * (Threads.threadid()-1)
+            spacedoffsets = (offset1, Base.tail(offsets)...)
+            _mapreduce_kernel!(f, op, initop, dims, blocks, arrays, strides, spacedoffsets)
+        else
+            di = dims[i]
+            ndi = di >> 1
+            nnthreads = nthreads >> 1
+            newdims = setindex(dims, ndi, i)
+            newoffsets = offsets
+            t = Threads.@spawn _mapreduce_threaded!(f, op, initop, newdims, blocks, strides, newoffsets, costs, arrays, nnthreads, spacing)
+            stridesi = getindex.(strides, i)
+            newoffsets2 = offsets .+ ndi .* stridesi
+            newdims2 = setindex(dims, di - ndi, i)
+            nnthreads2 = nthreads - nnthreads
+            _mapreduce_threaded!(f, op, initop, newdims2, blocks, strides, newoffsets2, costs, arrays, nnthreads2, spacing)
+            wait(t)
+        end
     end
+    return nothing
 end
 
 @generated function _mapreduce_kernel!(@nospecialize(f), @nospecialize(op),
@@ -375,7 +394,7 @@ end
 
 function indexorder(strides::NTuple{N,Int}) where {N}
     # returns order such that strides[i] is the order[i]th smallest element of strides, not counting zero strides
-    # zero strides have order N
+    # zero strides have order 1
     return ntuple(Val(N)) do i
         si = strides[i]
         si == 0 && return 1
@@ -403,55 +422,60 @@ function _lastargmax(t::Tuple)
     return i
 end
 
-_computeblocks(dims::Tuple{}, costs::Tuple{}, strides::Tuple{Vararg{Tuple{}}}, blocksize::Int = BLOCKSIZE) = ()
-function _computeblocks(dims::NTuple{N,Int}, costs::NTuple{N,Int}, strides::Tuple{Vararg{NTuple{N,Int}}}, blocksize::Int = BLOCKSIZE) where {N}
-    if _maxlength(dims, strides) <= blocksize
+const L1cache = 1<<15
+_computeblocks(dims::Tuple{}, costs::Tuple{},
+                bytestrides::Tuple{Vararg{Tuple{}}},
+                strideorders::Tuple{Vararg{Tuple{}}},
+                blocksize::Int = L1cache) = ()
+
+function _computeblocks(dims::NTuple{N,Int}, costs::NTuple{N,Int},
+                        bytestrides::Tuple{Vararg{NTuple{N,Int}}},
+                        strideorders::Tuple{Vararg{NTuple{N,Int}}},
+                        blocksize::Int = L1cache) where {N}
+    if totalmemoryregion(dims, bytestrides) <= blocksize
         return dims
-    elseif all(isequal(1), first.(indexorder.(strides)))
-        return (dims[1], _computeblocks(tail(dims), tail(costs), map(tail, strides), div(blocksize, dims[1]))...)
-    elseif blocksize == 0
-        return ntuple(n->1, StaticLength(N))
-    else
-        blocks = dims
-        while _maxlength(blocks, strides) >= 2*blocksize
-            i = _lastargmax((blocks .- 1) .* costs)
-            blocks = TupleTools.setindex(blocks, (blocks[i]+1)>>1, i)
-        end
-        while _maxlength(blocks, strides) > blocksize
-            i = _lastargmax((blocks .- 1) .* costs)
-            blocks = TupleTools.setindex(blocks, blocks[i]-1, i)
-        end
-        return blocks
     end
+    minstrideorder = minimum(minimum.(strideorders))
+    if all(isequal(minstrideorder), first.(strideorders))
+        d1 = dims[1]
+        dr = _computeblocks(tail(dims), tail(costs),
+                map(tail, bytestrides), map(tail, strideorders), blocksize)
+        return (d1, dr...)
+    end
+
+    if minimum(minimum.(bytestrides)) > blocksize
+        return ntuple(n->1, StaticLength(N))
+    end
+
+    # reduce dims to find appropriate blocks
+    blocks = dims
+    while totalmemoryregion(blocks, bytestrides) >= 2*blocksize
+        i = _lastargmax((blocks .- 1) .* costs)
+        blocks = TupleTools.setindex(blocks, (blocks[i]+1)>>1, i)
+    end
+    while totalmemoryregion(blocks, bytestrides) > blocksize
+        i = _lastargmax((blocks .- 1) .* costs)
+        blocks = TupleTools.setindex(blocks, blocks[i]-1, i)
+    end
+    return blocks
 end
 
-@inbounds function _computethreadblocks(dims::NTuple{N,Int}, costs::NTuple{N,Int}, strides::NTuple{M,NTuple{N,Int}}, offsets::NTuple{M,Int}) where {N,M}
-    threadblocks = [dims]
-    threadoffsets = [offsets]
-    for k in factors
-        l = length(threadblocks)
-        for j = 1:l
-            dims = popfirst!(threadblocks)
-            offsets = popfirst!(threadoffsets)
-            i = _lastargmax((dims .- (k-1)) .* costs)
-            if costs[i] == 0
-                push!(threadblocks, dims)
-                push!(threadoffsets, offsets)
-                return threadblocks, threadoffsets
+const _cachelinelength = 64
+function totalmemoryregion(dims, bytestrides)
+    memoryregion = 0
+    for i = 1:length(bytestrides)
+        strides = bytestrides[i]
+        numcontigeouscachelines = 0
+        numcachelineblocks = 1
+        for (d,s) in zip(dims, strides)
+            if s < _cachelinelength
+                numcontigeouscachelines += (d-1)*s
+            else
+                numcachelineblocks *= d
             end
-            ndi = div(dims[i], k)
-            newdims = setindex(dims, ndi, i)
-            stridesi = getindex.(strides, i)
-            for m = 1:k-1
-                push!(threadblocks, newdims)
-                push!(threadoffsets, offsets)
-                offsets = offsets .+ ndi .* stridesi
-            end
-            ndi = dims[i]-(k-1)*ndi
-            newdims = setindex(dims, ndi, i)
-            push!(threadblocks, newdims)
-            push!(threadoffsets, offsets)
         end
+        numcontigeouscachelines = div(numcontigeouscachelines, _cachelinelength) + 1
+        memoryregion += _cachelinelength * numcontigeouscachelines * numcachelineblocks
     end
-    return threadblocks, threadoffsets
+    return memoryregion
 end

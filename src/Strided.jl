@@ -11,57 +11,37 @@ using TupleTools: StaticLength
 
 export StridedView, @strided, @unsafe_strided, sreshape, sview
 
-# function __init__()
-#     LinearAlgebra.BLAS.set_num_threads(1)
-#     Threads.nthreads() == 1 && warn("Strided disables BLAS multithreading, enable Julia threading (`export JULIA_NUM_THREADS = N`) to benefit from multithreaded matrix multiplication and more")
-# end
+const _NTHREADS = Ref(1)
+_nthreads() = _NTHREADS[]
 
-const _use_threads = Ref(true)
-use_threads() = _use_threads[]
-
-"""
-    disable_threads()
-
-Disable the use of threading in Strided.
-Also see [`enable_threads()`](@ref)
-"""
-function disable_threads()
-    _use_threads[] = false
-    return
-end
-
-"""
-    enable_threads()
-
-(Re)-enable threading in Strided.
-"""
-function enable_threads()
-    _use_threads[] = true
-    return
-end
-
-# used to factor the number of threads
-function simpleprimefactorization(n::Int)
-    factors = Vector{Int}()
-    k = 2
-    while k <= n
-        d, r = divrem(n, k)
-        if r == 0
-            push!(factors, k)
-            n = d
-        else
-            k += 1
-        end
+function set_num_threads(n::Int)
+    N = Base.Threads.nthreads()
+    if n > N
+        n = N
+        _set_num_threads_warn(n)
     end
-    return factors
+    _NTHREADS[] = n
+end
+@noinline function _set_num_threads_warn(n)
+    @warn "Maximal number of threads limited by number of Julia threads,
+            setting number of threads equal to Threads.nthreads() = $n"
 end
 
-const factors = Vector{Int}(undef, 0)
+const _use_threaded_mul = Ref(false)
+use_threaded_mul() = _use_threaded_mul[]
+
+function disable_threaded_mul()
+    _use_threaded_mul[] = false
+    return
+end
+
+function enable_threaded_mul()
+    _use_threaded_mul[] = true
+    return
+end
 
 function __init__()
-    f = reverse!(simpleprimefactorization(Threads.nthreads()))
-    resize!(factors, length(f))
-    copyto!(factors, f)
+    set_num_threads(Base.Threads.nthreads())
 end
 
 include("abstractstridedview.jl")
