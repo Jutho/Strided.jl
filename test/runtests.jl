@@ -6,6 +6,8 @@ using Strided: StridedView, UnsafeStridedView
 
 Random.seed!(1234)
 
+println("Base.Threads.nthreads() =  $(Base.Threads.nthreads())")
+
 println("Running tests single-threaded:")
 Strided.disable_threads()
 include("othertests.jl")

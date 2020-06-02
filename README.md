@@ -28,10 +28,7 @@ of `Float32`, `Float64`, `ComplexF32` or `ComplexF64`), this is typically not ne
 BLAS is multithreaded by default. However, it can be beneficial to implement the
 multithreading using Julia Tasks, which then run on Julia's threads as distributed by
 Julia's scheduler. Hence, this feature should likely be used in combination with
-`LinearAlgebra.BLAS.set_num_threads(1)`. Performance seems to be on par (or even slightly
-better) than the threading strategy of OpenBLAS. However, note that the latter call also
-disables any multithreading used in LAPACK (e.g. `eigen`, `svd`, `qr`, ...) and Strided.jl
-does not help with that.
+`LinearAlgebra.BLAS.set_num_threads(1)`. Performance seems to be on par (within a few percent margin) with the threading strategies of OpenBLAS and MKL. However, note that the latter call also disables any multithreading used in LAPACK (e.g. `eigen`, `svd`, `qr`, ...) and Strided.jl does not help with that.
 
 # Examples
 
