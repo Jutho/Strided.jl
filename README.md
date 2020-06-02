@@ -8,10 +8,9 @@ mapping, reducing, broadcasting such arrays, as well as taking views, reshaping 
 permuting dimensions. Most of these are simply accessible by annotating a block of standard
 Julia code involving broadcasting and other array operations with the macro `@strided`.
 
----
 # What's new
 
-Strided.jl v1.0 uses the new `@spawn` threading infrastructure of Julia 1.3 and higher.
+Strided.jl v1 uses the new `@spawn` threading infrastructure of Julia 1.3 and higher.
 Futhermore, the use of multithreading is now more customizable, via the function
 `Strided.set_num_threads(n)`, where `n` can be any integer between `1` (no threading) and
 `Base.Threads.nthreads()`. This allows to spend only a part of the Julia threads on
@@ -34,7 +33,6 @@ better) than the threading strategy of OpenBLAS. However, note that the latter c
 disables any multithreading used in LAPACK (e.g. `eigen`, `svd`, `qr`, ...) and Strided.jl
 does not help with that.
 
----
 # Examples
 
 Running Julia with a single thread
