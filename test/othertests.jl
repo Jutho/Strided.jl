@@ -290,39 +290,6 @@ end
     end
 end
 
-for T1 in (Float32, Float64, Complex{Float32}, Complex{Float64})
-    for T2 in (Float32, Float64, Complex{Float32}, Complex{Float64})
-        @testset "multiplication with $SV: $T1 times $T2" for SV in (StridedView, UnsafeStridedView)
-            d = 20
-            A1 = rand(T1, (d,d))
-            A1c = copy(A1)
-            B1 = SV(A1c)
-            for op1 in (identity, conj, transpose, adjoint)
-                @test op1(A1) == op1(B1)
-            end
-            A2 = rand(T2, (d,d))
-            T3 = promote_type(T1,T2)
-            A3 = rand(T3, (d,d))
-            A2c = copy(A2)
-            A3c = copy(A3)
-            GC.@preserve A1c A2c A3c begin
-                B2 = SV(A2c)
-                B3 = SV(A3c)
-
-                for op1 in (identity, conj, transpose, adjoint)
-                    for op2 in (identity, conj, transpose, adjoint)
-                        @test op1(A1)*op2(A2) ≈ op1(B1)*op2(B2)
-                        for op3 in (identity, conj, transpose, adjoint)
-                            mul!(op3(B3), op1(B1), op2(B2))
-                            @test B3 ≈ op3(op1(A1)*op2(A2)) # op3 is its own inverse
-                        end
-                    end
-                end
-            end
-        end
-    end
-end
-
 @testset "@strided macro" begin
     @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
         A1, A2, A3 = rand(T, (10,)), rand(T, (10,10)), rand(T, (10,10,10))
@@ -421,5 +388,70 @@ end
         @test (@unsafe_strided(A1,A2,A3,view(A2,:,3)' .* reshape(view(A3,1:5,:,:), 5, 10, 5, 2) .- max.(abs.(view(A1,1:5)),real.(view(A3,4:4,4:4,2:2:10))))) ≈
             (@unsafe_strided(B1,B2,B3,B2' .* B3 .- max.(abs.(B1),real.(B3b)))) ≈
             view(A2,:,3)' .* reshape(view(A3,1:5,:,:), 5, 10, 5, 2) .- max.(abs.(view(A1,1:5)),real.(view(A3,4:4,4:4,2:2:10)))
+    end
+end
+
+
+@testset "multiplication with $SV: Complex{Int}" for SV in (StridedView, UnsafeStridedView)
+    d = 103
+    A1 = map(complex, rand(-100:100, (d,d)), rand(-100:100, (d,d)))
+    A2 = map(complex, rand(-100:100, (d,d)), rand(-100:100, (d,d)))
+    A3 = map(complex, rand(-100:100, (d,d)), rand(-100:100, (d,d)))
+    A4 = map(complex, rand(-100:100, (d,d)), rand(-100:100, (d,d)))
+    A1c = copy(A1)
+    A2c = copy(A2)
+    A3c = copy(A3)
+    A4c = copy(A4)
+    GC.@preserve A1c A2c A3c A4c begin
+        B1 = SV(A1c)
+        B2 = SV(A2c)
+        B3 = SV(A3c)
+        B4 = SV(A4c)
+
+        for op1 in (identity, conj, transpose, adjoint)
+            @test op1(A1) == op1(B1)
+            for op2 in (identity, conj, transpose, adjoint)
+                @test op1(A1)*op2(A2) ≈ op1(B1)*op2(B2)
+                for op3 in (identity, conj, transpose, adjoint)
+                    copyto!(B3, B4)
+                    α = 2 + im
+                    β = 3 - im
+                    Strided.mul!(op3(B3), op1(B1), op2(B2), α, β)
+                    @test B3 ≈ op3(β) * A4 + op3(α*op1(A1)*op2(A2)) # op3 is its own inverse
+                end
+            end
+        end
+    end
+end
+
+@testset "multiplication with $SV: Rational{Int}" for SV in (StridedView, UnsafeStridedView)
+    d = 103
+    A1 = map(//, rand(-10:10, (d,d)), rand(1:10, (d,d)))
+    A2 = map(//, rand(-10:10, (d,d)), rand(1:10, (d,d)))
+    A3 = map(//, rand(-10:10, (d,d)), rand(1:10, (d,d)))
+    A4 = map(//, rand(-10:10, (d,d)), rand(1:10, (d,d)))
+    A1c = copy(A1)
+    A2c = copy(A2)
+    A3c = copy(A3)
+    A4c = copy(A4)
+    GC.@preserve A1c A2c A3c A4c begin
+        B1 = SV(A1c)
+        B2 = SV(A2c)
+        B3 = SV(A3c)
+        B4 = SV(A4c)
+
+        for op1 in (identity, conj, transpose, adjoint)
+            @test op1(A1) == op1(B1)
+            for op2 in (identity, conj, transpose, adjoint)
+                @test op1(A1)*op2(A2) ≈ op1(B1)*op2(B2)
+                for op3 in (identity, conj, transpose, adjoint)
+                    α = 1//2
+                    β = 3//2
+                    copyto!(B3, B4)
+                    mul!(op3(B3), op1(B1), op2(B2), α, β)
+                    @test B3 ≈ op3(β)*A4 + op3(α * op1(A1)*op2(A2)) # op3 is its own inverse
+                end
+            end
+        end
     end
 end
