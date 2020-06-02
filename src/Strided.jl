@@ -27,6 +27,9 @@ end
             setting number of threads equal to Threads.nthreads() = $n"
 end
 
+enable_threads() = set_num_threads(Base.Threads.nthreads())
+disable_threads() = set_num_threads(1)
+
 const _use_threaded_mul = Ref(false)
 use_threaded_mul() = _use_threaded_mul[]
 

@@ -7,9 +7,14 @@ using Strided: StridedView, UnsafeStridedView
 Random.seed!(1234)
 
 println("Running tests single-threaded:")
-Strided.set_num_threads(1)
-include("alltests.jl")
+Strided.disable_threads()
+include("othertests.jl")
+include("multests.jl")
 
 println("Running tests multi-threaded:")
-Strided.set_num_threads(Base.Threads.nthreads())
-include("alltests.jl")
+Strided.enable_threads()
+include("othertests.jl")
+include("multests.jl")
+
+Strided.enable_threaded_mul()
+include("multests.jl")

@@ -102,7 +102,7 @@ function LinearAlgebra.mul!(C::AbstractStridedView{T,2}, A::AbstractStridedView{
     elseif stride(C,1) > stride(C,2)
         _mul!(transpose(C), transpose(B), transpose(A), α, β)
     else
-        if use_threaded_mul()
+        if use_threaded_mul() && _nthreads() > 1
             _threaded_mul!(C, A, B, α, β, _nthreads())
         else
             _mul!(C, A, B, α, β)
