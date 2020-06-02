@@ -102,37 +102,9 @@ function LinearAlgebra.mul!(C::AbstractStridedView{T,2}, A::AbstractStridedView{
     elseif stride(C,1) > stride(C,2)
         _mul!(transpose(C), transpose(B), transpose(A), α, β)
     else
-        if use_threaded_mul() && _nthreads() > 1
-            _threaded_mul!(C, A, B, α, β, _nthreads())
-        else
-            _mul!(C, A, B, α, β)
-        end
+        _mul!(C, A, B, α, β)
     end
     return C
-end
-
-function _threaded_mul!(C::AbstractStridedView{<:Any,2}, A::AbstractStridedView{<:Any,2}, B::AbstractStridedView{<:Any,2}, α, β, nthreads)
-    m, n = size(C)
-    m == size(A, 1) && n == size(B, 2) || throw(DimensionMismatch())
-    if nthreads == 1 || m*n < 1024
-        _mul!(C, A, B, α, β)
-    else
-        if m > n
-            m2 = m >> 1
-            nthreads2 = nthreads >> 1
-            t = Threads.@spawn _threaded_mul!(C[1:m2, :], A[1:m2, :], B, α, β, nthreads2)
-            _threaded_mul!(C[m2+1:m, :], A[m2+1:m, :], B, α, β, nthreads - nthreads2)
-            wait(t)
-            return C
-        else
-            n2 = n >> 1
-            nthreads2 = nthreads >> 1
-            t = Threads.@spawn _threaded_mul!(C[:, 1:n2], A, B[:, 1:n2], α, β, nthreads2)
-            _threaded_mul!(C[:, n2+1:n], A, B[:, n2+1:n], α, β, nthreads - nthreads2)
-            wait(t)
-            return C
-        end
-    end
 end
 
 function isblasmatrix(A::AbstractStridedView{T,2}) where {T<:LinearAlgebra.BlasFloat}
@@ -159,12 +131,37 @@ end
 # here we will have C.op == :identity && stride(C,1) < stride(C,2)
 function _mul!(C::AbstractStridedView{T,2}, A::AbstractStridedView{T,2}, B::AbstractStridedView{T,2}, α, β) where {T<:LinearAlgebra.BlasFloat}
     if stride(C,1) == 1 && isblasmatrix(A) && isblasmatrix(B)
+        nthreads = use_threaded_mul() ? _nthreads() : 1
+        _threaded_blas_mul!(C, A, B, α, β, nthreads)
+    else
+        return __mul!(C, A, B, α, β)
+    end
+end
+
+function _threaded_blas_mul!(C::AbstractStridedView{T,2}, A::AbstractStridedView{T,2}, B::AbstractStridedView{T,2}, α, β, nthreads) where {T<:LinearAlgebra.BlasFloat}
+    m, n = size(C)
+    m == size(A, 1) && n == size(B, 2) || throw(DimensionMismatch())
+    if nthreads == 1 || m*n < 1024
         A2, CA = getblasmatrix(A)
         B2, CB = getblasmatrix(B)
         C2 = blasstrides(C)
         LinearAlgebra.BLAS.gemm!(CA, CB, convert(T, α), A2, B2, convert(T, β), C2)
     else
-        return __mul!(C, A, B, α, β)
+        if m > n
+            m2 = round(Int, m/16)*8
+            nthreads2 = nthreads >> 1
+            t = Threads.@spawn _threaded_blas_mul!(C[1:m2, :], A[1:m2, :], B, α, β, nthreads2)
+            _threaded_blas_mul!(C[m2+1:m, :], A[m2+1:m, :], B, α, β, nthreads - nthreads2)
+            wait(t)
+            return C
+        else
+            n2 = round(Int, n/16)*8
+            nthreads2 = nthreads >> 1
+            t = Threads.@spawn _threaded_blas_mul!(C[:, 1:n2], A, B[:, 1:n2], α, β, nthreads2)
+            _threaded_blas_mul!(C[:, n2+1:n], A, B[:, n2+1:n], α, β, nthreads - nthreads2)
+            wait(t)
+            return C
+        end
     end
 end
 
