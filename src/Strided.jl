@@ -12,7 +12,7 @@ using TupleTools: StaticLength
 export StridedView, @strided, @unsafe_strided, sreshape, sview
 
 const _NTHREADS = Ref(1)
-_nthreads() = _NTHREADS[]
+get_num_threads() = _NTHREADS[]
 
 function set_num_threads(n::Int)
     N = Base.Threads.nthreads()

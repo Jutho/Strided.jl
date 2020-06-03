@@ -131,7 +131,7 @@ end
 # here we will have C.op == :identity && stride(C,1) < stride(C,2)
 function _mul!(C::AbstractStridedView{T,2}, A::AbstractStridedView{T,2}, B::AbstractStridedView{T,2}, α, β) where {T<:LinearAlgebra.BlasFloat}
     if stride(C,1) == 1 && isblasmatrix(A) && isblasmatrix(B)
-        nthreads = use_threaded_mul() ? _nthreads() : 1
+        nthreads = use_threaded_mul() ? get_num_threads() : 1
         _threaded_blas_mul!(C, A, B, α, β, nthreads)
     else
         return __mul!(C, A, B, α, β)

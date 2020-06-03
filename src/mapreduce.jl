@@ -128,12 +128,12 @@ function _mapreduce_block!(@nospecialize(f), @nospecialize(op), @nospecialize(in
     # t = @elapsed _computeblocks(dims, costs, bytestrides, strideorders)
     # println("_computeblocks time: $t")
 
-    if _nthreads() == 1 || prod(dims) <= MINTHREADLENGTH
+    if get_num_threads() == 1 || prod(dims) <= MINTHREADLENGTH
         _mapreduce_kernel!(f, op, initop, dims, blocks, arrays, strides, offsets)
     elseif op !== nothing && _length(dims, strides[1]) == 1 # complete reduction
         T = eltype(arrays[1])
         spacing = isbitstype(T) ? min(1, div(64, sizeof(T))) : 1# to avoid false sharing
-        threadedout = similar(arrays[1], spacing*_nthreads())
+        threadedout = similar(arrays[1], spacing*get_num_threads())
         a = arrays[1][ParentIndex(1)]
         if initop !== nothing
             a = initop(a)
@@ -141,9 +141,9 @@ function _mapreduce_block!(@nospecialize(f), @nospecialize(op), @nospecialize(in
         _init_reduction!(threadedout, f, op, a)
 
         newarrays = (threadedout, Base.tail(arrays)...)
-        _mapreduce_threaded!(f, op, nothing, dims, blocks, strides, offsets, costs, newarrays, _nthreads(), spacing)
+        _mapreduce_threaded!(f, op, nothing, dims, blocks, strides, offsets, costs, newarrays, get_num_threads(), spacing)
 
-        for i = 1:_nthreads()
+        for i = 1:get_num_threads()
             a = op(a, threadedout[(i-1)*spacing+1])
         end
         arrays[1][ParentIndex(1)] = a
@@ -153,7 +153,7 @@ function _mapreduce_block!(@nospecialize(f), @nospecialize(op), @nospecialize(in
         # dimensions), so that they are not divided in threading (which would lead to
         # race conditions)
 
-        _mapreduce_threaded!(f, op, initop, dims, blocks, strides, offsets, costs, arrays, _nthreads(), 0)
+        _mapreduce_threaded!(f, op, initop, dims, blocks, strides, offsets, costs, arrays, get_num_threads(), 0)
     end
     return
 end
