@@ -118,6 +118,7 @@ function _mapreduce_order!(@nospecialize(f), @nospecialize(op), @nospecialize(in
     _mapreduce_block!(f, op, initop, dims, strides, offsets, costs, arrays)
 end
 
+const MINTHREADLENGTH = 256 # minimal length before any kind of threading is applied
 function _mapreduce_block!(@nospecialize(f), @nospecialize(op), @nospecialize(initop),
         dims, strides, offsets, costs, arrays)
 
@@ -127,9 +128,9 @@ function _mapreduce_block!(@nospecialize(f), @nospecialize(op), @nospecialize(in
     # t = @elapsed _computeblocks(dims, costs, bytestrides, strideorders)
     # println("_computeblocks time: $t")
 
-    if _nthreads() == 1
+    if _nthreads() == 1 || prod(dims) <= MINTHREADLENGTH
         _mapreduce_kernel!(f, op, initop, dims, blocks, arrays, strides, offsets)
-    elseif _length(dims, strides[1]) == 1 # complete reduction
+    elseif op !== nothing && _length(dims, strides[1]) == 1 # complete reduction
         T = eltype(arrays[1])
         spacing = isbitstype(T) ? min(1, div(64, sizeof(T))) : 1# to avoid false sharing
         threadedout = similar(arrays[1], spacing*_nthreads())
@@ -170,7 +171,7 @@ _init_reduction!(out, f, op, a) = op(a,a) == a ? fill!(out, a) : error("unknown 
 function _mapreduce_threaded!(@nospecialize(f), @nospecialize(op), @nospecialize(initop),
         dims, blocks, strides, offsets, costs, arrays, nthreads, spacing)
 
-    if nthreads == 1
+    if nthreads == 1 || prod(dims) <= MINTHREADLENGTH
         offset1 = offsets[1] + spacing * (Threads.threadid()-1)
         spacedoffsets = (offset1, Base.tail(offsets)...)
         _mapreduce_kernel!(f, op, initop, dims, blocks, arrays, strides, spacedoffsets)
