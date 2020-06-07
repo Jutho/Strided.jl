@@ -1,5 +1,3 @@
-const BLOCKSIZE = 1024
-
 Base.mapreduce(f, op, A::AbstractStridedView; dims=:, kw...) =
     Base._mapreduce_dim(f, op, kw.data, A, dims)
 
@@ -118,13 +116,14 @@ function _mapreduce_order!(@nospecialize(f), @nospecialize(op), @nospecialize(in
     _mapreduce_block!(f, op, initop, dims, strides, offsets, costs, arrays)
 end
 
-const MINTHREADLENGTH = 256 # minimal length before any kind of threading is applied
+const MINTHREADLENGTH = 1<<15 # minimal length before any kind of threading is applied
 function _mapreduce_block!(@nospecialize(f), @nospecialize(op), @nospecialize(initop),
         dims, strides, offsets, costs, arrays)
 
     bytestrides = map((s, stride)-> s.*stride, sizeof.(eltype.(arrays)), strides)
     strideorders = map(indexorder, strides)
     blocks = _computeblocks(dims, costs, bytestrides, strideorders)
+
     # t = @elapsed _computeblocks(dims, costs, bytestrides, strideorders)
     # println("_computeblocks time: $t")
 
@@ -423,16 +422,16 @@ function _lastargmax(t::Tuple)
     return i
 end
 
-const L1cache = 1<<15
+const BLOCKMEMORYSIZE = 1<<15 # L1 cache size in bytes
 _computeblocks(dims::Tuple{}, costs::Tuple{},
                 bytestrides::Tuple{Vararg{Tuple{}}},
                 strideorders::Tuple{Vararg{Tuple{}}},
-                blocksize::Int = L1cache) = ()
+                blocksize::Int = BLOCKMEMORYSIZE) = ()
 
 function _computeblocks(dims::NTuple{N,Int}, costs::NTuple{N,Int},
                         bytestrides::Tuple{Vararg{NTuple{N,Int}}},
                         strideorders::Tuple{Vararg{NTuple{N,Int}}},
-                        blocksize::Int = L1cache) where {N}
+                        blocksize::Int = BLOCKMEMORYSIZE) where {N}
     if totalmemoryregion(dims, bytestrides) <= blocksize
         return dims
     end
