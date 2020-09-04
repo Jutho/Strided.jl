@@ -39,6 +39,7 @@ Base.stride(a::StridedView{<:Any, 0}, n::Int) = 1
 Base.stride(a::StridedView{<:Any, N}, n::Int) where N =
     (n <= N) ? a.strides[n] : a.strides[N]*a.size[N]
 offset(a::StridedView) = a.offset
+Base.parent(a::StridedView) = a.parent
 
 function blasstrides(a::StridedView{<:Any,2})
     # canonialize strides to make compatible with gemm
