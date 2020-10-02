@@ -275,6 +275,19 @@ function _simplify(size::Dims{N}, strides::Dims{N}) where {N}
     end
 end
 
+_normalizestrides(size::Tuple{}, strides::Tuple{}) = strides
+function _normalizestrides(size::Dims{N}, strides::Dims{N}) where {N}
+    if size[1] <= 1 # 0 or 1
+        strides = Base.setindex(strides, 1, 1)
+    end
+    for i = 2:N
+        if size[i] <= 1 # 0 or 1
+            strides = Base.setindex(strides, strides[i-1]*max(1, size[i-1]), i)
+        end
+    end
+    return strides
+end
+
 _computereshapestrides(newsize::Tuple{}, oldsize::Tuple{}, strides::Tuple{}) = strides
 function _computereshapestrides(newsize::Tuple{}, oldsize::Dims{N}, strides::Dims{N}) where {N}
     all(isequal(1), oldsize) || throw(DimensionMismatch())

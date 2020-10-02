@@ -11,7 +11,7 @@ function UnsafeStridedView(a::Ptr{PT}, size::NTuple{N,Int}, strides::NTuple{N,In
 
     @assert isbitstype(PT)
     T = Base.promote_op(op, PT)
-    UnsafeStridedView{T,N,PT,F}(a, size, strides, offset, op)
+    UnsafeStridedView{T,N,PT,F}(a, size, _normalizestrides(size, strides), offset, op)
 end
 
 UnsafeStridedView(a::Ptr{T}, size::NTuple{N,Int}, strides::NTuple{N,Int},

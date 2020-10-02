@@ -14,7 +14,8 @@ function StridedView(parent::Array{S},
 
     T = Base.promote_op(op, S)
     # reshape array to vector in order to reduce number of element types
-    StridedView{T,N,Vector{S},F}(reshape(parent, length(parent)), size, strides, offset, op)
+    StridedView{T,N,Vector{S},F}(reshape(parent, length(parent)), size,
+                                    _normalizestrides(size, strides), offset, op)
 end
 function StridedView(parent::A,
                         size::NTuple{N,Int} = size(parent),
