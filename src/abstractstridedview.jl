@@ -176,7 +176,9 @@ function __mul!(C::AbstractStridedView{<:Any,2}, A::AbstractStridedView{<:Any,2}
     B2 = sreshape(permutedims(B,(2,1)), (1, n, k))
     C2 = sreshape(C, (m, n, 1))
 
-    if α == 1
+    if α == 0 || k == 0
+        rmul!(C, β)
+    elseif α == 1
         if β == 0
             _mapreducedim!(*, +, zero, (m,n,k), (C2,A2,B2))
         elseif β == 1
@@ -184,7 +186,7 @@ function __mul!(C::AbstractStridedView{<:Any,2}, A::AbstractStridedView{<:Any,2}
         else
             _mapreducedim!(*, +, x->x*β, (m,n,k), (C2,A2,B2))
         end
-    elseif α != 0
+    else
         f = (x,y)->(x*y*α)
         if β == 0
             _mapreducedim!(f, +, zero, (m,n,k), (C2,A2,B2))
@@ -193,8 +195,6 @@ function __mul!(C::AbstractStridedView{<:Any,2}, A::AbstractStridedView{<:Any,2}
         else
             _mapreducedim!(f, +, x->x*β, (m,n,k), (C2,A2,B2))
         end
-    else
-        rmul!(C, β)
     end
     return C
 end
@@ -277,12 +277,18 @@ end
 
 _normalizestrides(size::Tuple{}, strides::Tuple{}) = strides
 function _normalizestrides(size::Dims{N}, strides::Dims{N}) where {N}
-    if size[1] <= 1 # 0 or 1
+    if size[1] == 1
         strides = Base.setindex(strides, 1, 1)
+    elseif size[1] == 0
+        strides = one.(strides)
     end
     for i = 2:N
-        if size[i] <= 1 # 0 or 1
-            strides = Base.setindex(strides, strides[i-1]*max(1, size[i-1]), i)
+        if size[i] == 1
+            strides = Base.setindex(strides, size[i-1]*strides[i-1], i)
+        elseif size[i] == 0
+            for j = i:N
+                strides = Base.setindex(strides, size[i-1]*strides[i-1], j)
+            end
         end
     end
     return strides
