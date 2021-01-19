@@ -2,7 +2,7 @@
 
 A Julia package for working more efficiently with strided arrays, i.e. dense arrays whose
 memory layout has a fixed stride along every dimension. Strided.jl does not make any
-assumptions about the strides (such as stride 1 along first dimension, or monotonously
+assumptions about the strides (such as stride 1 along first dimension, or monotonically
 increasing strides) and provides multithreaded and cache friendly implementations for
 mapping, reducing, broadcasting such arrays, as well as taking views, reshaping and
 permuting dimensions. Most of these are simply accessible by annotating a block of standard
