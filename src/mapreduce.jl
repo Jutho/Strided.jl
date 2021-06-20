@@ -1,5 +1,5 @@
 Base.mapreduce(f, op, A::AbstractStridedView; dims=:, kw...) =
-    Base._mapreduce_dim(f, op, kw.data, A, dims)
+    Base._mapreduce_dim(f, op, values(kw), A, dims)
 
 Base._mapreduce_dim(f, op, nt::NamedTuple{(:init,)}, A::AbstractStridedView, ::Colon) =
     _mapreduce(f, op, A, nt)
