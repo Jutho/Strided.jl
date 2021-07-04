@@ -91,12 +91,14 @@ Base.conj(a::StridedView{<:Real}) = a
 Base.conj(a::StridedView) = StridedView(a.parent, a.size, a.strides, a.offset, _conj(a.op))
 
 @inline function Base.permutedims(a::StridedView{<:Any,N}, p) where {N}
-    (length(p) == N && TupleTools.isperm(p)) ||
-        throw(ArgumentError("Invalid permutation of length $N: $p"))
+    _isperm(N, p) || throw(ArgumentError("Invalid permutation of length $N: $p"))
     newsize = TupleTools._permute(a.size, p)
     newstrides = TupleTools._permute(a.strides, p)
     return StridedView(a.parent, newsize, newstrides, a.offset, a.op)
 end
+_isperm(N::Integer, p::AbstractVector) = (length(p) == N && isperm(p))
+_isperm(N::Integer, p::NTuple{M,Integer}) where M = (M == N && TupleTools.isperm(p))
+_isperm(N::Integer, p) = false
 
 LinearAlgebra.transpose(a::StridedView{<:Number,2}) = permutedims(a, (2,1))
 LinearAlgebra.adjoint(a::StridedView{<:Number,2}) = permutedims(conj(a), (2,1))
