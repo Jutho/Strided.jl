@@ -32,6 +32,8 @@ StridedView(a::Adjoint) = StridedView(a')'
 StridedView(a::Transpose) = transpose(StridedView(transpose(a)))
 StridedView(a::Base.SubArray) = sview(StridedView(a.parent), a.indices...)
 StridedView(a::Base.ReshapedArray) = sreshape(StridedView(a.parent), a.dims)
+StridedView(a::Base.PermutedDimsArray{T,N,P}) where {T,N,P} =
+    permutedims(StridedView(a.parent), P)
 
 # Methods for StridedView
 Base.size(a::StridedView) = a.size

@@ -153,8 +153,8 @@ function _mapreduce_block!(@nospecialize(f), @nospecialize(op), @nospecialize(in
     else
         costs = costs .* .!(iszero.(strides[1]))
         # make cost of dimensions with zero stride in output array (reduction
-        # dimensions), so that they are not divided in threading (which would lead to
-        # race conditions)
+        # dimensions) equal to zero, so that they are not divided in threading
+        # (which would lead to race conditions)
 
         _mapreduce_threaded!(f, op, initop, dims, blocks, strides, offsets, costs, arrays, get_num_threads(), 0)
     end

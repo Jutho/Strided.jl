@@ -150,14 +150,14 @@ function _threaded_blas_mul!(C::AbstractStridedView{T,2}, A::AbstractStridedView
         if m > n
             m2 = round(Int, m/16)*8
             nthreads2 = nthreads >> 1
-            t = Threads.@spawn _threaded_blas_mul!(C[1:m2, :], A[1:m2, :], B, α, β, nthreads2)
+            t = Threads.@spawn _threaded_blas_mul!(C[1:$m2, :], A[1:$m2, :], B, α, β, $nthreads2)
             _threaded_blas_mul!(C[m2+1:m, :], A[m2+1:m, :], B, α, β, nthreads - nthreads2)
             wait(t)
             return C
         else
             n2 = round(Int, n/16)*8
             nthreads2 = nthreads >> 1
-            t = Threads.@spawn _threaded_blas_mul!(C[:, 1:n2], A, B[:, 1:n2], α, β, nthreads2)
+            t = Threads.@spawn _threaded_blas_mul!(C[:, 1:$n2], A, B[:, 1:$n2], α, β, $nthreads2)
             _threaded_blas_mul!(C[:, n2+1:n], A, B[:, n2+1:n], α, β, nthreads - nthreads2)
             wait(t)
             return C

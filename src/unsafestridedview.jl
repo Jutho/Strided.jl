@@ -24,6 +24,8 @@ UnsafeStridedView(a::Transpose{<:Any, <:StridedArray}) =
     transpose(UnsafeStridedView(transpose(a)))
 UnsafeStridedView(a::Base.SubArray) = sview(UnsafeStridedView(a.parent), a.indices...)
 UnsafeStridedView(a::Base.ReshapedArray) = sreshape(UnsafeStridedView(a.parent), a.dims)
+UnsafeStridedView(a::Base.PermutedDimsArray{T,N,P}) where {T,N,P} =
+    permutedims(UnsafeStridedView(a.parent), P)
 
 # Methods for UnsafeStridedView
 Base.size(a::UnsafeStridedView) = a.size
