@@ -1,4 +1,28 @@
-# Strided.jl [![Build Status](https://github.com/Jutho/Strided.jl/workflows/CI/badge.svg)](https://github.com/Jutho/Strided.jl/actions)[![Coverage](https://codecov.io/gh/Jutho/Strided.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/Jutho/Strided.jl)
+<img src="https://github.com/Jutho/Strided.jl/blob/master/docs/src/assets/logo.svg" width="150">
+
+# Strided.jl
+
+Strided array views with efficient (cache-friendly and multithreaded) manipulations
+
+| **Build Status** | **Downloads** |
+|:-----------------:|:----------------:|
+| [![CI][ci-img]][ci-url] [![CI (Julia nightly)][ci-julia-nightly-img]][ci-julia-nightly-url] [![][codecov-img]][codecov-url] | [![Strided Downloads][genie-img]][genie-url] |
+
+[github-img]: https://github.com/Jutho/Strided.jl/workflows/CI/badge.svg
+[github-url]: https://github.com/Jutho/Strided.jl/actions?query=workflow%3ACI
+
+[ci-img]: https://github.com/Jutho/TensorOperations.jl/workflows/CI/badge.svg
+[ci-url]: https://github.com/Jutho/TensorOperations.jl/actions?query=workflow%3ACI
+
+[ci-julia-nightly-img]: https://github.com/Jutho/Strided.jl/workflows/CI%20(Julia%20nightly)/badge.svg
+[ci-julia-nightly-url]: https://github.com/Jutho/Strided.jl/actions?query=workflow%3A%22CI+%28Julia+nightly%29%22
+
+[codecov-img]: https://codecov.io/gh/Jutho/Strided.jl/branch/master/graph/badge.svg
+[codecov-url]: https://codecov.io/gh/Jutho/Strided.jl
+
+[genie-img]: https://shields.io/endpoint?url=https://pkgs.genieframework.com/api/v1/badge/Strided
+[genie-url]: https://pkgs.genieframework.com?packages=Strided
+
 
 A Julia package for working more efficiently with strided arrays, i.e. dense arrays whose
 memory layout has a fixed stride along every dimension. Strided.jl does not make any
