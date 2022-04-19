@@ -19,8 +19,8 @@ UnsafeStridedView(a::Ptr{T}, size::NTuple{N,Int}, strides::NTuple{N,Int},
 UnsafeStridedView(a::DenseArray) = UnsafeStridedView(pointer(a), size(a), strides(a))
 UnsafeStridedView(a::StridedView) = UnsafeStridedView(pointer(a), size(a), strides(a))
 
-UnsafeStridedView(a::Adjoint{<:Any, <:StridedArray}) = UnsafeStridedView(a')'
-UnsafeStridedView(a::Transpose{<:Any, <:StridedArray}) =
+UnsafeStridedView(a::Adjoint{<:Any, <:Any}) = UnsafeStridedView(a')'
+UnsafeStridedView(a::Transpose{<:Any, <:Any}) =
     transpose(UnsafeStridedView(transpose(a)))
 UnsafeStridedView(a::Base.SubArray) = sview(UnsafeStridedView(a.parent), a.indices...)
 UnsafeStridedView(a::Base.ReshapedArray) = sreshape(UnsafeStridedView(a.parent), a.dims)
