@@ -17,7 +17,7 @@ end
 UnsafeStridedView(a::Ptr{T}, size::NTuple{N,Int}, strides::NTuple{N,Int},
     offset::Int = 0) where {T,N} = UnsafeStridedView(a, size, strides, offset, identity)
 UnsafeStridedView(a::DenseArray) = UnsafeStridedView(pointer(a), size(a), strides(a))
-UnsafeStridedView(a::StridedView) = UnsafeStridedView(pointer(a), size(a), strides(a))
+UnsafeStridedView(a::StridedView) = UnsafeStridedView(pointer(parent(a)), size(a), strides(a), offset(a), a.op)
 
 UnsafeStridedView(a::Adjoint{<:Any, <:Any}) = UnsafeStridedView(a')'
 UnsafeStridedView(a::Transpose{<:Any, <:Any}) =
