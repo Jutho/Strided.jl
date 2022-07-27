@@ -13,7 +13,7 @@ jobs:
           - '1.4' # minimal version
           - '1.6' # LTS version
           - '1' # automatically expands to the latest stable 1.x release of Julia
-          - '1.8' # release candidate version
+          - '~1.8.0-0' # release candidate version
         os:
           - ubuntu-latest
           - macOS-latest
