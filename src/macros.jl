@@ -31,7 +31,7 @@ _strided(ex) = ex
 maybestrided(A::AbstractStridedView) = A
 maybestrided(A::AbstractArray) = StridedView(A)
 maybestrided(A) = A
-maybeunstrided(A::StridedView) = copy(A).parent
+maybeunstrided(A::StridedView) = reshape(copy(A).parent, size(A))
 maybeunstrided(A) = A
 
 macro unsafe_strided(args...)
