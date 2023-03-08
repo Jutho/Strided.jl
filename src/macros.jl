@@ -1,6 +1,6 @@
 macro strided(ex)
     ex = macroexpand(__module__, ex)
-    esc(_strided(ex))
+    return esc(_strided(ex))
 end
 
 function _strided(ex::Expr)
@@ -25,27 +25,26 @@ function _strided(ex::Expr)
     end
 end
 const exclusionlist = Symbol[:(:)]
-_strided(ex::Symbol) =  ex in exclusionlist ? ex : Expr(:call, :(Strided.maybestrided), ex)
+_strided(ex::Symbol) = ex in exclusionlist ? ex : Expr(:call, :(Strided.maybestrided), ex)
 _strided(ex) = ex
 
-maybestrided(A::AbstractStridedView) = A
+maybestrided(A::StridedView) = A
 maybestrided(A::AbstractArray) = StridedView(A)
 maybestrided(A) = A
 maybeunstrided(A::StridedView) = reshape(copy(A).parent, size(A))
 maybeunstrided(A) = A
 
+# TODO: deprecate
 macro unsafe_strided(args...)
-    syms = args[1:end-1]
+    syms = args[1:(end - 1)]
     ex = macroexpand(__module__, args[end]) #_strided(args[end])
     all(isa(s, Symbol) for s in syms) ||
         error("The first arguments to `@unsafe_strided` must be variable names")
-    ex = Expr(:let, Expr(:block, [:($s = Strided.UnsafeStridedView($s)) for s in syms]...), ex)
-    return esc(:(GC.@preserve $(syms...) $ex))
+
+    ex = Expr(:let, Expr(:block, [:($s = Strided.StridedView($s)) for s in syms]...), ex)
+    warnex = :(Base.depwarn("`@unsafe_strided A B C ... ex` is deprecated, use `@strided ex` instead.",
+                            Core.Typeof(var"@unsafe_strided").name.mt.name))
+    return esc(Expr(:block, warnex, ex))
 end
 
-# macro sfor(args...)
-#     syms = args[1:end-1]
-#     all(isa(s, Symbol) for s in syms) || error("The first arguments to `@sfor` must be variable names that will be usek")
-#     ex = macroexpand(__module__, args[end])
-#     ex = _sfor(syms, ex)
-# end
+export @unsafe_strided

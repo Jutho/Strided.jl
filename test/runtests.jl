@@ -2,7 +2,7 @@ using Test
 using LinearAlgebra
 using Random
 using Strided
-using Strided: StridedView, UnsafeStridedView
+using Strided: StridedView
 
 Random.seed!(1234)
 
@@ -20,3 +20,6 @@ include("blasmultests.jl")
 
 Strided.enable_threaded_mul()
 include("blasmultests.jl")
+
+using Aqua
+Aqua.test_all(Strided)

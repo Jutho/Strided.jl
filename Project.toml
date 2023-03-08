@@ -1,19 +1,14 @@
 name = "Strided"
 uuid = "5e0ebb24-38b0-5f93-81fe-25c709ecae67"
-authors = ["Jutho Haegeman"]
-version = "1.2.3"
+authors = ["Jutho Haegeman <jutho.haegeman@ugent.be> and contributors"]
+version = "2.0.0"
 
 [deps]
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+StridedViews = "4db3bf67-4bd7-4b4e-b153-31dc3fb37143"
 TupleTools = "9d95972d-f1c8-5527-a6e0-b4b365fa01f6"
 
 [compat]
+StridedViews = "0.1"
 TupleTools = "1.1"
-julia = "1.4"
-
-[extras]
-Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
-Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
-
-[targets]
-test = ["Test", "Random"]
+julia = "1.6"
