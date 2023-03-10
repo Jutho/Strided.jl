@@ -1,12 +1,13 @@
-<img src="https://github.com/Jutho/Strided.jl/blob/master/docs/src/assets/logo.svg" width="150">
+<img src="https://github.com/Jutho/Strided.jl/blob/main/docs/src/assets/logo.svg"
+width="150">
 
 # Strided.jl
 
 Strided array views with efficient (cache-friendly and multithreaded) manipulations
 
-| **Build Status** | **Downloads** |
-|:-----------------:|:----------------:|
-| [![CI][ci-img]][ci-url] [![CI (Julia nightly)][ci-julia-nightly-img]][ci-julia-nightly-url] [![][codecov-img]][codecov-url] | [![Strided Downloads][genie-img]][genie-url] |
+| **Build Status** | **Coverage** | **Quality assurance** | **Downloads** |
+|:----------------:|:------------:|:---------------------:|:--------------|
+| [![CI][ci-img]][ci-url] [![CI (Julia nightly)][ci-julia-nightly-img]][ci-julia-nightly-url] | [![Codecov][codecov-img]][codecov-url] | [![Aqua QA][aqua-img]][aqua-url] | [![Strided Downloads][genie-img]][genie-url] |
 
 [github-img]: https://github.com/Jutho/Strided.jl/workflows/CI/badge.svg
 [github-url]: https://github.com/Jutho/Strided.jl/actions?query=workflow%3ACI
@@ -14,13 +15,19 @@ Strided array views with efficient (cache-friendly and multithreaded) manipulati
 [ci-img]: https://github.com/Jutho/TensorOperations.jl/workflows/CI/badge.svg
 [ci-url]: https://github.com/Jutho/TensorOperations.jl/actions?query=workflow%3ACI
 
-[ci-julia-nightly-img]: https://github.com/Jutho/Strided.jl/workflows/CI%20(Julia%20nightly)/badge.svg
-[ci-julia-nightly-url]: https://github.com/Jutho/Strided.jl/actions?query=workflow%3A%22CI+%28Julia+nightly%29%22
+[ci-julia-nightly-img]:
+    https://github.com/Jutho/Strided.jl/workflows/CI%20(Julia%20nightly)/badge.svg
+[ci-julia-nightly-url]:
+    https://github.com/Jutho/Strided.jl/actions?query=workflow%3A%22CI+%28Julia+nightly%29%22
 
 [codecov-img]: https://codecov.io/gh/Jutho/Strided.jl/branch/master/graph/badge.svg
 [codecov-url]: https://codecov.io/gh/Jutho/Strided.jl
 
-[genie-img]: https://shields.io/endpoint?url=https://pkgs.genieframework.com/api/v1/badge/Strided
+[aqua-img]: https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg
+[aqua-url]: https://github.com/JuliaTesting/Aqua.jl
+
+[genie-img]:
+    https://shields.io/endpoint?url=https://pkgs.genieframework.com/api/v1/badge/Strided
 [genie-url]: https://pkgs.genieframework.com?packages=Strided
 
 
@@ -31,28 +38,22 @@ increasing strides) and provides multithreaded and cache friendly implementation
 mapping, reducing, broadcasting such arrays, as well as taking views, reshaping and
 permuting dimensions. Most of these are simply accessible by annotating a block of standard
 Julia code involving broadcasting and other array operations with the macro `@strided`.
+Currently, Strided.jl only supports arrays in the main memory and does not provide
+implementations for arrays on GPUs or other hardware accelerators.
 
 # What's new
 
-Strided.jl v1 uses the new `@spawn` threading infrastructure of Julia 1.3 and higher.
-Futhermore, the use of multithreading is now more customizable, via the function
-`Strided.set_num_threads(n)`, where `n` can be any integer between `1` (no threading) and
-`Base.Threads.nthreads()`. This allows to spend only a part of the Julia threads on
-multithreading, i.e. Strided will never spawn more than `n-1` additional tasks. By default,
-`n = Base.Threads.nthreads()`, i.e. threading is enabled by default. There are also
-convenience functions
-`Strided.enable_threads() = Strided.set_num_threads(Threads.nthreads())`
-and `Strided.disable_threads() = Strided.set_num_threads(1)`.
+Strided.jl v2 reduces the complexity of the implementation. It discards of the
+`UnsafeStridedView` type, which was pointer based and required to avoid allocations prior to
+Julia v1.5 (because of [#14955](https://github.com/JuliaLang/julia/issues/14955)). The
+associated `@unsafe_strided` macro has been deprecated.
 
-Furthermore, there is an experimental feature (disabled by default) to apply multithreading
-for matrix multiplication using a divide-and-conquer strategy. It can be enabled via
-`Strided.enable_threaded_mul()` (and similarly `Strided.disable_threaded_mul()` to revert to
-the default setting). For matrices with a `LinearAlgebra.BlasFloat` element type (i.e. any
-of `Float32`, `Float64`, `ComplexF32` or `ComplexF64`), this is typically not necessary as
-BLAS is multithreaded by default. However, it can be beneficial to implement the
-multithreading using Julia Tasks, which then run on Julia's threads as distributed by
-Julia's scheduler. Hence, this feature should likely be used in combination with
-`LinearAlgebra.BLAS.set_num_threads(1)`. Performance seems to be on par (within a few percent margin) with the threading strategies of OpenBLAS and MKL. However, note that the latter call also disables any multithreading used in LAPACK (e.g. `eigen`, `svd`, `qr`, ...) and Strided.jl does not help with that.
+The main structured type `StridedView` for representing a strided view over a contiguous
+array (`DenseArray`) is now defined in a separate package
+[StridedViews.jl](https://github.com/Jutho/StridedViews.jl). This definition is device
+agnostic and can thus also be used in combination with dense GPU arrays. However, at the
+moment, the methods implemented in Strided.jl are restricted to strided views over `Array`
+data.
 
 # Examples
 
@@ -159,28 +160,11 @@ julia> @btime @strided $B .= permutedims($A, (1,2,3,4)) .+ permutedims($A, (2,3,
 ## `StridedView`
 
 Strided.jl is centered around the type `StridedView`, which provides a view into a parent
-array of type `DenseArray` such that the resulting view is strided, i.e. any dimension
-has an associated stride, such that e.g.
-```julia
-getindex(A, i₁, i₂, i₃, ...) = A.op(A.parent[offset + 1 + (i₁-1)*s₁ + (i₂-1)*s₂ + (i₃-1)*s₃ + ...])
-```
-with `sⱼ = stride(A, iⱼ)`. There are no further assumptions on the strides, e.g. they are
-not assumed to be monotonously increasing or have `s₁ == 1`. Furthermore, `A.op` can be
-any of the operations `identity`, `conj`, `transpose` or `adjoint` (the latter two are
-equivalent to the former two if `eltype(A) <: Number`). Since these operations are their own
-inverse, they are also used in the corresponding `setindex!`.
-
-This definition enables a `StridedView` to be lazy (i.e. returns just another `StridedView`
-over the same parent data) under application of `conj`, `transpose`, `adjoint`,
-`permutedims` and indexing (`getindex`) with `Union{Integer, Colon,
-AbstractRange{<:Integer}}` (a.k.a slicing).
-
-Furthermore, the strided structure can be retained under certain `reshape` operations, but
-not all of them. Any dimension can always be split into smaller dimensions, but two
-subsequent dimensions `i` and `i+1` can only be joined if `stride(A,i+1) ==
-size(A,i)*stride(A,i)`. Instead of overloading `reshape`, Strided.jl provides a separate
-function `sreshape` which returns a `StridedView` over the same parent data, or throws a
-runtime error if this is impossible.
+array of type `DenseArray` such that the resulting view is strided. The definition of this
+type, together with the set of methods that create `StridedView` instances, and transform
+them into eachother, are now implemented in
+[StridedViews.jl](https://github.com/Jutho/StridedViews.jl). This package is device agnostic
+and never actually operators on the data in a nontrivial manner.
 
 ## Broadcasting and `map(reduce)`
 
@@ -245,33 +229,6 @@ case. Note that `Base.ReinterpretArray` is currently not supported.
 
 Note again that, unlike `StridedArray`s, `StridedView`s behave lazily (i.e. still produce a
 view on the same parent array) under `permutedims` and regular indexing with ranges.
-
-## `UnsafeStridedView` and `@unsafe_strided`
-Based on the work of [UnsafeArrays.jl](https://github.com/oschulz/UnsafeArrays.jl) there is
-also an `UnsafeStridedView`, which references the parent array via a pointer, and therefore
-is itself a stack allocated `struct` (i.e. `isbitstype(UnsafeStridedView{...})` is true).
-
-It behaves in all respects the same as `StridedView` (they are both subtypes of
-`AbstractStridedView`), except that by itself it does not keep a reference to the parent
-array in a way that is visible to Julia's garbage collector. It can therefore not be the
-return value of an operation (in particular
-`similar(::UnsafeStridedView, ...) -> ::StridedView`) and an explicit reference to the
-parent array needs to be kept alive. Furthermore, `UnsafeStridedView` wrappers can only be
-created of `AbstractArray{T}` instances with `isbitstype(T)`.
-
-There is a corresponding `@unsafe_strided` macro annotation. However, in this case the
-arrays in the expression need to be identified explicitly as
-```julia
-@unsafe_strided A₁ A₂ ... some_expression
-```
-
-because this will be translated into the expression
-```julia
-GC.@preserve A₁ A₂ ...
-let A₁ = UnsafeStridedView(A₁), A₂ = ...
-    some_expression
-end
-```
 
 # Planned features / wish list
 

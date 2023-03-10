@@ -175,6 +175,13 @@ end
               (@strided(B2' .* B3 .- max.(abs.(B1), real.(B3b)))) ≈
               view(A2, :, 3)' .* reshape(view(A3, 1:5, :, :), 5, 10, 5, 2) .-
               max.(abs.(view(A1, 1:5)), real.(view(A3, 4:4, 4:4, 2:2:10)))
+        
+        x = @strided begin
+            p = :A => A1
+            f = pair -> (pair.first, pair.second)
+            f(p)
+        end
+        @test x[2] === A1
     end
 end
 

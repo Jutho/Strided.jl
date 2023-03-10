@@ -30,8 +30,17 @@ _strided(ex) = ex
 
 maybestrided(A::StridedView) = A
 maybestrided(A::AbstractArray) = StridedView(A)
+maybestrided(A::Tuple) = maybestrided.(A)
 maybestrided(A) = A
-maybeunstrided(A::StridedView) = reshape(copy(A).parent, size(A))
+function maybeunstrided(A::StridedView)
+    Ap = A.parent
+    if size(A) == size(Ap) && strides(A) == strides(Ap) && offset(A) == 0 && A.op == identity
+        return Ap
+    else
+        return reshape(copy(A).parent, size(A))
+    end
+end
+maybeunstrided(A::Tuple) = maybeunstrided.(A)
 maybeunstrided(A) = A
 
 # TODO: deprecate
