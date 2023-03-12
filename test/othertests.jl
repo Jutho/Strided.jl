@@ -276,6 +276,9 @@ end
                 mul!(op3(B3), op1(B1), op2(B2), α, β)
                 @test B3 ≈ op3(β) * A4 + op3(α * op1(A1) * op2(A2)) # op3 is its own inverse
                 copyto!(B3, B4)
+                mul!(op3(B3), op1(B1), op2(B2), α, 0)
+                @test B3 ≈ op3(α * op1(A1) * op2(A2)) # op3 is its own inverse
+                copyto!(B3, B4)
                 mul!(op3(B3), op1(B1), op2(B2))
                 @test B3 ≈ op3( op1(A1) * op2(A2)) # op3 is its own inverse
             end
@@ -308,6 +311,9 @@ end
                 copyto!(B3, B4)
                 mul!(op3(B3), op1(B1), op2(B2), α, β)
                 @test B3 ≈ op3(β) * A4 + op3(α * op1(A1) * op2(A2)) # op3 is its own inverse
+                copyto!(B3, B4)
+                mul!(op3(B3), op1(B1), op2(B2), α, 1)
+                @test B3 ≈ A4 + op3(α * op1(A1) * op2(A2)) # op3 is its own inverse
                 copyto!(B3, B4)
                 mul!(op3(B3), op1(B1), op2(B2), 1, 1)
                 @test B3 ≈ A4 + op3(op1(A1) * op2(A2)) # op3 is its own inverse
