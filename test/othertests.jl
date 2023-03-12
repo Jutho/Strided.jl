@@ -30,11 +30,15 @@ end
             @test rmul!(B1, 1 // 2) ≈ rmul!(A1, 1 // 2)
             @test lmul!(1 // 3, B2) ≈ lmul!(1 // 3, A2)
             @test axpy!(1 // 3, B1, B2) ≈ axpy!(1 // 3, A1, A2)
+            @test axpy!(1, B1, B3) ≈ axpy!(1, A1, A3)
             @test axpby!(1 // 3, B1, 1 // 2, B3) ≈ axpby!(1 // 3, A1, 1 // 2, A3)
+            @test axpby!(1, B1, 1, B3) ≈ axpby!(1, A1, 1, A3)
             @test map((x, y, z) -> sin(x) + y / exp(-abs(z)), B1, B2, B3) ≈
                   map((x, y, z) -> sin(x) + y / exp(-abs(z)), A1, A2, A3)
             @test map((x, y, z) -> sin(x) + y / exp(-abs(z)), B1, B2, B3) isa StridedView
             @test map((x, y, z) -> sin(x) + y / exp(-abs(z)), B1, A2, B3) isa Array
+            @test mul!(B1, 1, B2) ≈ mul!(A1, 1, A2)
+            @test mul!(B1, B2, 1) ≈ mul!(A1, A2, 1)
         end
     end
 end
@@ -266,11 +270,14 @@ end
         for op2 in (identity, conj, transpose, adjoint)
             @test op1(A1) * op2(A2) ≈ op1(B1) * op2(B2)
             for op3 in (identity, conj, transpose, adjoint)
-                copyto!(B3, B4)
                 α = 2 + im
                 β = 3 - im
-                Strided.mul!(op3(B3), op1(B1), op2(B2), α, β)
+                copyto!(B3, B4)
+                mul!(op3(B3), op1(B1), op2(B2), α, β)
                 @test B3 ≈ op3(β) * A4 + op3(α * op1(A1) * op2(A2)) # op3 is its own inverse
+                copyto!(B3, B4)
+                mul!(op3(B3), op1(B1), op2(B2))
+                @test B3 ≈ op3( op1(A1) * op2(A2)) # op3 is its own inverse
             end
         end
     end
@@ -301,6 +308,9 @@ end
                 copyto!(B3, B4)
                 mul!(op3(B3), op1(B1), op2(B2), α, β)
                 @test B3 ≈ op3(β) * A4 + op3(α * op1(A1) * op2(A2)) # op3 is its own inverse
+                copyto!(B3, B4)
+                mul!(op3(B3), op1(B1), op2(B2), 1, 1)
+                @test B3 ≈ A4 + op3(op1(A1) * op2(A2)) # op3 is its own inverse
             end
         end
     end
