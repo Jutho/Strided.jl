@@ -178,6 +178,21 @@ involved have strides which are not monotonously increasing, e.g. if `transpose`
 or `permutedims` has been applied. The fact that the latter also acts lazily (whereas it
 creates a copy of the data in Julia base) can potentially provide a further speedup.
 
+## The `@strided` macro annotation
+Rather than manually wrapping every array in a `StridedView`, there is the macro annotation
+`@strided some_expression`, which will wrap all `DenseArray`s appearing in `some_expression`
+in a `StridedView`. Note that, because `StridedView`s behave lazily under indexing with
+ranges, this acts similar to the `@views` macro in Julia Base, i.e. there is no need to use
+a view.
+
+The macro `@strided` acts as a contract, i.e. the user ensures that all array manipulations
+in the following expressions will preserve the strided structure. Therefore, `reshape` and
+`view` are are replaced by `sreshape` and `sview` respectively. As mentioned above,
+`sreshape` will throw an error if the requested new shape is incompatible with preserving
+the strided structure. The function `sview` is only defined for index arguments which are
+ranges, `Int`s or `Colon` (`:`), and will thus also throw an error if indexed by anything
+else.
+
 ## Multithreading support
 
 The optimized methods in Strided.jl are implemented with support for multithreading. Thus,
@@ -207,21 +222,6 @@ Julia's scheduler. Hence, this feature should likely be used in combination with
 percent margin) with the threading strategies of OpenBLAS and MKL. However, note that the
 latter call also disables any multithreading used in LAPACK (e.g. `eigen`, `svd`, `qr`, ...)
 and Strided.jl does not help with that.
-
-## The `@strided` macro annotation
-Rather than manually wrapping every array in a `StridedView`, there is the macro annotation
-`@strided some_expression`, which will wrap all `DenseArray`s appearing in `some_expression`
-in a `StridedView`. Note that, because `StridedView`s behave lazily under indexing with
-ranges, this acts similar to the `@views` macro in Julia Base, i.e. there is no need to use
-a view.
-
-The macro `@strided` acts as a contract, i.e. the user ensures that all array manipulations
-in the following expressions will preserve the strided structure. Therefore, `reshape` and
-`view` are are replaced by `sreshape` and `sview` respectively. As mentioned above,
-`sreshape` will throw an error if the requested new shape is incompatible with preserving
-the strided structure. The function `sview` is only defined for index arguments which are
-ranges, `Int`s or `Colon` (`:`), and will thus also throw an error if indexed by anything
-else.
 
 ## `StridedView` versus `StridedArray` and BLAS/LAPACK compatibility
 
