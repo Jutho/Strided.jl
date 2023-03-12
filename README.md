@@ -178,11 +178,35 @@ involved have strides which are not monotonously increasing, e.g. if `transpose`
 or `permutedims` has been applied. The fact that the latter also acts lazily (whereas it
 creates a copy of the data in Julia base) can potentially provide a further speedup.
 
-Furthermore, these optimized methods are implemented with support for multithreading. Thus,
+## Multithreading support
+
+The optimized methods in Strided.jl are implemented with support for multithreading. Thus,
 if `Threads.nthreads() > 1` and the arrays involved are sufficiently large, performance can
 be boosted even for plain arrays with a strictly sequential memory layout, provided that the
 broadcast operation is compute bound and not memory bound (i.e. the broadcast function is
 sufficienlty complex).
+
+Strided.jl uses the @spawn threading infrastructure, and the number of tasks that will be
+spawned is customizable via the function `Strided.set_num_threads(n)`, where `n` can be any
+integer between 1 (no threading) and `Base.Threads.nthreads()`. This allows to spend only a
+part of the Julia threads on multithreading, i.e. Strided will never spawn more than `n-1`
+additional tasks. By default, `n = Base.Threads.nthreads()`, i.e. threading is enabled by
+default. There are also convenience functions `Strided.enable_threads() =
+Strided.set_num_threads(Threads.nthreads())` and `Strided.disable_threads() =
+Strided.set_num_threads(1)`.
+
+Furthermore, there is an experimental feature (disabled by default) to apply multithreading
+for matrix multiplication using a divide-and-conquer strategy. It can be enabled via
+`Strided.enable_threaded_mul()` (and similarly `Strided.disable_threaded_mul()` to revert to
+the default setting). For matrices with a `LinearAlgebra.BlasFloat` element type (i.e. any
+of `Float32`, `Float64`, `ComplexF32` or `ComplexF64`), this is typically not necessary as
+BLAS is multithreaded by default. However, it can be beneficial to implement the
+multithreading using Julia Tasks, which then run on Julia's threads as distributed by
+Julia's scheduler. Hence, this feature should likely be used in combination with
+`LinearAlgebra.BLAS.set_num_threads(1)`. Performance seems to be on par (within a few
+percent margin) with the threading strategies of OpenBLAS and MKL. However, note that the
+latter call also disables any multithreading used in LAPACK (e.g. `eigen`, `svd`, `qr`, ...)
+and Strided.jl does not help with that.
 
 ## The `@strided` macro annotation
 Rather than manually wrapping every array in a `StridedView`, there is the macro annotation
