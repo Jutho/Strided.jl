@@ -74,12 +74,12 @@ end
 function getblasmatrix(A::StridedView{T,2}) where {T<:LinearAlgebra.BlasFloat}
     if A.op == identity
         if stride(A, 1) == 1
-            return blasstrides(A), 'N'
+            return A, 'N'
         else
-            return blasstrides(transpose(A)), 'T'
+            return transpose(A), 'T'
         end
     else
-        return blasstrides(adjoint(A)), 'C'
+        return adjoint(A), 'C'
     end
 end
 
@@ -102,8 +102,7 @@ function _threaded_blas_mul!(C::StridedView{T,2}, A::StridedView{T,2}, B::Stride
     if nthreads == 1 || m * n < 1024
         A2, CA = getblasmatrix(A)
         B2, CB = getblasmatrix(B)
-        C2 = blasstrides(C)
-        LinearAlgebra.BLAS.gemm!(CA, CB, convert(T, α), A2, B2, convert(T, β), C2)
+        LinearAlgebra.BLAS.gemm!(CA, CB, convert(T, α), A2, B2, convert(T, β), C)
     else
         if m > n
             m2 = round(Int, m / 16) * 8
@@ -162,11 +161,11 @@ function __mul!(C::StridedView{<:Any,2}, A::StridedView{<:Any,2}, B::StridedView
     return C
 end
 
-function blasstrides(a::StridedView{T,2,A,F}) where {T,A<:DenseArray,F}
-    # canonicalize strides to make compatible with gemm
-    if size(a, 2) == 1 && stride(a, 1) == 1
-        return StridedView{T,2,A,F}(a.parent, a.size, (1, size(a, 1)), a.offset, a.op)
-    else
-        return a
-    end
-end
+# function blasstrides(a::StridedView{T,2,A,F}) where {T,A<:DenseArray,F}
+#     # canonicalize strides to make compatible with gemm
+#     if size(a, 2) == 1 && stride(a, 1) == 1
+#         return StridedView{T,2,A,F}(a.parent, a.size, (1, size(a, 1)), a.offset, a.op)
+#     else
+#         return a
+#     end
+# end

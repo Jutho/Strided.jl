@@ -20,7 +20,7 @@ Strided array views with efficient (cache-friendly and multithreaded) manipulati
 [ci-julia-nightly-url]:
     https://github.com/Jutho/Strided.jl/actions?query=workflow%3A%22CI+%28Julia+nightly%29%22
 
-[codecov-img]: https://codecov.io/gh/Jutho/Strided.jl/branch/master/graph/badge.svg
+[codecov-img]: https://codecov.io/gh/Jutho/Strided.jl/branch/main/graph/badge.svg
 [codecov-url]: https://codecov.io/gh/Jutho/Strided.jl
 
 [aqua-img]: https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg
