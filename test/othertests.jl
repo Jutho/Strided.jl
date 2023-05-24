@@ -284,6 +284,16 @@ end
             end
         end
     end
+    
+    A = map(complex, rand(-100:100, (2, 0)), rand(-100:100, (2, 0)))
+    B = map(complex, rand(-100:100, (0, 2)), rand(-100:100, (0, 2)))
+    C = map(complex, rand(-100:100, (2, 2)), rand(-100:100, (2, 2)))
+    α = complex(rand(-100:100), rand(-100:100))
+    β = one(eltype(C))
+    A1 = StridedView(copy(A))
+    B1 = StridedView(copy(B))
+    C1 = StridedView(copy(C))
+    @test mul!(C, A, B, α, β) ≈ mul!(C1, A1, B1, α, β)
 end
 
 @testset "multiplication with StridedView: Rational{Int}" begin

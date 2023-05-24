@@ -84,3 +84,15 @@ for T1 in (Float32, Float64, Complex{Float32}, Complex{Float64})
         end
     end
 end
+
+@testset "Matrix multiplication with length 0" begin
+    A = rand(2, 0)
+    B = rand(0, 2)
+    C = rand(2, 2)
+    α = rand()
+    β = rand()
+    A1 = StridedView(copy(A))
+    B1 = StridedView(copy(B))
+    C1 = StridedView(copy(C))
+    @test mul!(C, A, B, α, β) ≈ mul!(C1, A1, B1, α, β)
+end

@@ -87,7 +87,7 @@ function _mapreducedim!(@nospecialize(f), @nospecialize(op), @nospecialize(inito
                         dims::Dims, arrays::Tuple{Vararg{StridedView}})
     if any(isequal(0), dims)
         if !any(isequal(0), size(arrays[1]))
-            map!(initop, arrays[1], arrays[1])
+            isnothing(initop) || map!(initop, arrays[1], arrays[1])
         end
     else
         _mapreduce_fuse!(f, op, initop, dims, promoteshape(dims, arrays...))
