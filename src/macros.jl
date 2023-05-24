@@ -34,7 +34,8 @@ maybestrided(A::Tuple) = maybestrided.(A)
 maybestrided(A) = A
 function maybeunstrided(A::StridedView)
     Ap = A.parent
-    if size(A) == size(Ap) && strides(A) == strides(Ap) && offset(A) == 0 && A.op == identity
+    if size(A) == size(Ap) && strides(A) == strides(Ap) && offset(A) == 0 &&
+       A.op == identity
         return Ap
     else
         return reshape(copy(A).parent, size(A))

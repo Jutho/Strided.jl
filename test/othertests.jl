@@ -179,7 +179,7 @@ end
               (@strided(B2' .* B3 .- max.(abs.(B1), real.(B3b)))) ≈
               view(A2, :, 3)' .* reshape(view(A3, 1:5, :, :), 5, 10, 5, 2) .-
               max.(abs.(view(A1, 1:5)), real.(view(A3, 4:4, 4:4, 2:2:10)))
-        
+
         x = @strided begin
             p = :A => A1
             f = pair -> (pair.first, pair.second)
@@ -280,11 +280,11 @@ end
                 @test B3 ≈ op3(α * op1(A1) * op2(A2)) # op3 is its own inverse
                 copyto!(B3, B4)
                 mul!(op3(B3), op1(B1), op2(B2))
-                @test B3 ≈ op3( op1(A1) * op2(A2)) # op3 is its own inverse
+                @test B3 ≈ op3(op1(A1) * op2(A2)) # op3 is its own inverse
             end
         end
     end
-    
+
     A = map(complex, rand(-100:100, (2, 0)), rand(-100:100, (2, 0)))
     B = map(complex, rand(-100:100, (0, 2)), rand(-100:100, (0, 2)))
     C = map(complex, rand(-100:100, (2, 2)), rand(-100:100, (2, 2)))

@@ -15,7 +15,7 @@ include("blasmultests.jl")
 
 println("Running tests multi-threaded:")
 Strided.enable_threads()
-Strided.set_num_threads(Base.Threads.nthreads()+1)
+Strided.set_num_threads(Base.Threads.nthreads() + 1)
 include("othertests.jl")
 include("blasmultests.jl")
 
