@@ -160,12 +160,3 @@ function __mul!(C::StridedView{<:Any,2}, A::StridedView{<:Any,2}, B::StridedView
     end
     return C
 end
-
-# function blasstrides(a::StridedView{T,2,A,F}) where {T,A<:DenseArray,F}
-#     # canonicalize strides to make compatible with gemm
-#     if size(a, 2) == 1 && stride(a, 1) == 1
-#         return StridedView{T,2,A,F}(a.parent, a.size, (1, size(a, 1)), a.offset, a.op)
-#     else
-#         return a
-#     end
-# end
