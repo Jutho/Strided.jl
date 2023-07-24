@@ -12,8 +12,8 @@ Strided array views with efficient (cache-friendly and multithreaded) manipulati
 [github-img]: https://github.com/Jutho/Strided.jl/workflows/CI/badge.svg
 [github-url]: https://github.com/Jutho/Strided.jl/actions?query=workflow%3ACI
 
-[ci-img]: https://github.com/Jutho/TensorOperations.jl/workflows/CI/badge.svg
-[ci-url]: https://github.com/Jutho/TensorOperations.jl/actions?query=workflow%3ACI
+[ci-img]: https://github.com/Jutho/Strided.jl/workflows/CI/badge.svg
+[ci-url]: https://github.com/Jutho/Strided.jl/actions?query=workflow%3ACI
 
 [ci-julia-nightly-img]:
     https://github.com/Jutho/Strided.jl/workflows/CI%20(Julia%20nightly)/badge.svg
