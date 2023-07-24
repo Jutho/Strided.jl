@@ -483,7 +483,7 @@ function _computeblocks(dims::NTuple{N,Int}, costs::NTuple{N,Int},
     end
 
     if minimum(minimum.(bytestrides)) > blocksize
-        return ntuple(n -> 1, StaticLength(N))
+        return ntuple(n -> 1, N)
     end
 
     # reduce dims to find appropriate blocks
