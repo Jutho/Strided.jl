@@ -162,7 +162,7 @@ function _mapreduce_block!(@nospecialize(f), @nospecialize(op), @nospecialize(in
 
         newarrays = (threadedout, Base.tail(arrays)...)
         _mapreduce_threaded!(f, op, nothing, dims, blocks, strides, offsets, costs,
-                             newarrays, get_num_threads(), spacing)
+                             newarrays, get_num_threads(), spacing, 1)
 
         for i in 1:get_num_threads()
             a = op(a, threadedout[(i - 1) * spacing + 1])
@@ -194,9 +194,9 @@ end
 # reduction
 function _mapreduce_threaded!(@nospecialize(f), @nospecialize(op), @nospecialize(initop),
                               dims, blocks, strides, offsets, costs, arrays, nthreads,
-                              spacing)
+                              spacing, taskindex)
     if nthreads == 1 || prod(dims) <= MINTHREADLENGTH
-        offset1 = offsets[1] + spacing * (Threads.threadid() - 1)
+        offset1 = offsets[1] + spacing * (taskindex - 1)
         spacedoffsets = (offset1, Base.tail(offsets)...)
         _mapreduce_kernel!(f, op, initop, dims, blocks, arrays, strides, spacedoffsets)
     else
@@ -213,13 +213,13 @@ function _mapreduce_threaded!(@nospecialize(f), @nospecialize(op), @nospecialize
             newoffsets = offsets
             t = Threads.@spawn _mapreduce_threaded!(f, op, initop, newdims, blocks, strides,
                                                     newoffsets, costs, arrays, nnthreads,
-                                                    spacing)
+                                                    spacing, taskindex)
             stridesi = getindex.(strides, i)
             newoffsets2 = offsets .+ ndi .* stridesi
             newdims2 = setindex(dims, di - ndi, i)
             nnthreads2 = nthreads - nnthreads
             _mapreduce_threaded!(f, op, initop, newdims2, blocks, strides, newoffsets2,
-                                 costs, arrays, nnthreads2, spacing)
+                                 costs, arrays, nnthreads2, spacing, taskindex + nnthreads)
             wait(t)
         end
     end

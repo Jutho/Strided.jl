@@ -115,7 +115,7 @@ end
         @test minimum(real, R1) ≈ minimum(real, StridedView(R1))
         @test sum(x -> real(x) < 0, R1) == sum(x -> real(x) < 0, StridedView(R1))
 
-        R1 = permutedims(R1, (randperm(6)...,))
+        R1 = PermutedDimsArray(R1, (randperm(6)...,))
 
         @test sum(R1) ≈ sum(StridedView(R1))
         @test maximum(abs, R1) ≈ maximum(abs, StridedView(R1))
