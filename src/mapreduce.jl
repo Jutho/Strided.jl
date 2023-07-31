@@ -174,7 +174,7 @@ function _mapreduce_block!(@nospecialize(f), @nospecialize(op), @nospecialize(in
         # so that they are not divided in threading (which would lead to race conditions)
 
         _mapreduce_threaded!(f, op, initop, dims, blocks, strides, offsets, costs, arrays,
-                             get_num_threads(), 0)
+                             get_num_threads(), 0, 1)
     end
     return
 end
