@@ -83,7 +83,7 @@ end
     return _mapreducedim!(f, op, nothing, dims, (b, a1, A...))
 end
 
-function _mapreducedim!(@nospecialize(f), @nospecialize(op), @nospecialize(initop),
+function _mapreducedim!((f), (op), (initop),
                         dims::Dims, arrays::Tuple{Vararg{StridedView}})
     if any(isequal(0), dims)
         if length(arrays[1]) != 0 && !isnothing(initop)
@@ -95,7 +95,7 @@ function _mapreducedim!(@nospecialize(f), @nospecialize(op), @nospecialize(inito
     return arrays[1]
 end
 
-function _mapreduce_fuse!(@nospecialize(f), @nospecialize(op), @nospecialize(initop),
+function _mapreduce_fuse!((f), (op), (initop),
                           dims::Dims, arrays::Tuple{Vararg{StridedView}})
     # Fuse dimensions if possible: assume that at least one array, e.g. the output array in
     # arrays[1], has its strides sorted
@@ -116,7 +116,7 @@ function _mapreduce_fuse!(@nospecialize(f), @nospecialize(op), @nospecialize(ini
     return _mapreduce_order!(f, op, initop, dims, allstrides, arrays)
 end
 
-function _mapreduce_order!(@nospecialize(f), @nospecialize(op), @nospecialize(initop),
+function _mapreduce_order!((f), (op), (initop),
                            dims, strides, arrays)
     M = length(arrays)
     N = length(dims)
@@ -139,7 +139,7 @@ function _mapreduce_order!(@nospecialize(f), @nospecialize(op), @nospecialize(in
 end
 
 const MINTHREADLENGTH = 1 << 15 # minimal length before any kind of threading is applied
-function _mapreduce_block!(@nospecialize(f), @nospecialize(op), @nospecialize(initop),
+function _mapreduce_block!((f), (op), (initop),
                            dims, strides, offsets, costs, arrays)
     bytestrides = map((s, stride) -> s .* stride, sizeof.(eltype.(arrays)), strides)
     strideorders = map(indexorder, strides)
@@ -192,7 +192,7 @@ end
 
 # nthreads: number of threads spacing: extra addition to offset of array 1, to account for
 # reduction
-function _mapreduce_threaded!(@nospecialize(f), @nospecialize(op), @nospecialize(initop),
+function _mapreduce_threaded!((f), (op), (initop),
                               dims, blocks, strides, offsets, costs, arrays, nthreads,
                               spacing, taskindex)
     if nthreads == 1 || prod(dims) <= MINTHREADLENGTH
@@ -226,8 +226,8 @@ function _mapreduce_threaded!(@nospecialize(f), @nospecialize(op), @nospecialize
     return nothing
 end
 
-@generated function _mapreduce_kernel!(@nospecialize(f), @nospecialize(op),
-                                       @nospecialize(initop), dims::NTuple{N,Int},
+@generated function _mapreduce_kernel!((f), (op),
+                                       (initop), dims::NTuple{N,Int},
                                        blocks::NTuple{N,Int},
                                        arrays::NTuple{M,StridedView},
                                        strides::NTuple{M,NTuple{N,Int}},
