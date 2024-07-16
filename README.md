@@ -7,7 +7,7 @@ Strided array views with efficient (cache-friendly and multithreaded) manipulati
 
 | **Build Status** | **Coverage** | **Quality assurance** | **Downloads** |
 |:----------------:|:------------:|:---------------------:|:--------------|
-| [![CI][ci-img]][ci-url] [![CI (Julia nightly)][ci-julia-nightly-img]][ci-julia-nightly-url] | [![Codecov][codecov-img]][codecov-url] | [![Aqua QA][aqua-img]][aqua-url] | [![Strided Downloads][genie-img]][genie-url] |
+| [![CI][ci-img]][ci-url] [![CI (Julia nightly)][ci-julia-nightly-img]][ci-julia-nightly-url] | [![Codecov][codecov-img]][codecov-url] | [![Aqua QA][aqua-img]][aqua-url] | [![Strided Downloads][downloads-img]][downloads-url] |
 
 [github-img]: https://github.com/Jutho/Strided.jl/workflows/CI/badge.svg
 [github-url]: https://github.com/Jutho/Strided.jl/actions?query=workflow%3ACI
@@ -26,10 +26,8 @@ Strided array views with efficient (cache-friendly and multithreaded) manipulati
 [aqua-img]: https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg
 [aqua-url]: https://github.com/JuliaTesting/Aqua.jl
 
-[genie-img]:
-    https://shields.io/endpoint?url=https://pkgs.genieframework.com/api/v1/badge/Strided
-[genie-url]: https://pkgs.genieframework.com?packages=Strided
-
+[downloads-img]: https://img.shields.io/badge/dynamic/json?url=http%3A%2F%2Fjuliapkgstats.com%2Fapi%2Fv1%2Ftotal_downloads%2FStrided&query=total_requests&label=Downloads
+[downloads-url]: http://juliapkgstats.com/pkg/Strided
 
 A Julia package for working more efficiently with strided arrays, i.e. dense arrays whose
 memory layout has a fixed stride along every dimension. Strided.jl does not make any
