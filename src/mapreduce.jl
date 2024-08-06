@@ -428,11 +428,11 @@ function indexorder(strides::NTuple{N,Int}) where {N}
     # returns order such that strides[i] is the order[i]th smallest element of strides, not
     # counting zero strides zero strides have order 1
     return ntuple(Val(N)) do i
-        si = strides[i]
+        si = abs(strides[i])
         si == 0 && return 1
         k = 1
         for s in strides
-            if s != 0 && s < si
+            if s != 0 && abs(s) < si
                 k += 1
             end
         end
