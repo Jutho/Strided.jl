@@ -52,7 +52,7 @@ function Base.map!(f::F, b::StridedView{<:Any,N}, a1::StridedView{<:Any,N},
     return b
 end
 
-function _mapreduce(f, op, A::StridedView{T}, nt=nothing) where {T}
+function _mapreduce(f::F1, op::F2, A::StridedView{T}, nt=nothing) where {T,F1,F2}
     if length(A) == 0
         b = Base.mapreduce_empty(f, op, T)
         return nt === nothing ? b : op(b, nt.init)
@@ -83,8 +83,8 @@ end
     return _mapreducedim!(f, op, nothing, dims, (b, a1, A...))
 end
 
-function _mapreducedim!((f), (op), (initop),
-                        dims::Dims, arrays::Tuple{Vararg{StridedView}})
+function _mapreducedim!((f)::F1, (op)::F2, (initop)::F3,
+                        dims::Dims, arrays::Tuple{Vararg{StridedView}}) where {F1,F2,F3}
     if any(isequal(0), dims)
         if length(arrays[1]) != 0 && !isnothing(initop)
             map!(initop, arrays[1], arrays[1])
@@ -95,8 +95,8 @@ function _mapreducedim!((f), (op), (initop),
     return arrays[1]
 end
 
-function _mapreduce_fuse!((f), (op), (initop),
-                          dims::Dims, arrays::Tuple{Vararg{StridedView}})
+function _mapreduce_fuse!((f)::F1, (op)::F2, (initop)::F3,
+                          dims::Dims, arrays::Tuple{Vararg{StridedView}}) where {F1,F2,F3}
     # Fuse dimensions if possible: assume that at least one array, e.g. the output array in
     # arrays[1], has its strides sorted
     allstrides = map(strides, arrays)
@@ -116,8 +116,8 @@ function _mapreduce_fuse!((f), (op), (initop),
     return _mapreduce_order!(f, op, initop, dims, allstrides, arrays)
 end
 
-function _mapreduce_order!((f), (op), (initop),
-                           dims, strides, arrays)
+function _mapreduce_order!((f)::F1, (op)::F2, (initop)::F3,
+                           dims, strides, arrays) where {F1,F2,F3}
     M = length(arrays)
     N = length(dims)
     # sort order of loops/dimensions by modelling the importance of each dimension
@@ -139,8 +139,8 @@ function _mapreduce_order!((f), (op), (initop),
 end
 
 const MINTHREADLENGTH = 1 << 15 # minimal length before any kind of threading is applied
-function _mapreduce_block!((f), (op), (initop),
-                           dims, strides, offsets, costs, arrays)
+function _mapreduce_block!((f)::F1, (op)::F2, (initop)::F3,
+                           dims, strides, offsets, costs, arrays) where {F1,F2,F3}
     bytestrides = map((s, stride) -> s .* stride, sizeof.(eltype.(arrays)), strides)
     strideorders = map(indexorder, strides)
     blocks = _computeblocks(dims, costs, bytestrides, strideorders)
