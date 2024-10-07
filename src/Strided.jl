@@ -13,7 +13,7 @@ using StridedViews
 using StridedViews: offset, ParentIndex
 
 # re-export?
-export StridedView, @strided, sreshape, sview
+export StridedView, @strided, sreshape, sview, isstrided
 
 const _NTHREADS = Ref(1)
 get_num_threads() = _NTHREADS[]
