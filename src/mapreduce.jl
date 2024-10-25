@@ -71,9 +71,9 @@ function _mapreduce(f, op, A::StridedView{T}, nt=nothing) where {T}
     return out[ParentIndex(1)]
 end
 
-@inline function Base.mapreducedim!(f, op, b::StridedView{<:Any,N},
-                                    a1::StridedView{<:Any,N},
-                                    A::Vararg{StridedView{<:Any,N}}) where {N}
+function Base.mapreducedim!(f, op, b::StridedView{<:Any,N},
+                            a1::StridedView{<:Any,N},
+                            A::Vararg{StridedView{<:Any,N}}) where {N}
     outdims = size(b)
     dims = map(max, outdims, map(max, map(size, (a1, A...))...))
 
@@ -176,7 +176,7 @@ function _mapreduce_block!((f), (op), (initop),
         _mapreduce_threaded!(f, op, initop, dims, blocks, strides, offsets, costs, arrays,
                              get_num_threads(), 0, 1)
     end
-    return
+    return nothing
 end
 
 _init_reduction!(out, f, op::Union{typeof(+),typeof(Base.add_sum)}, a) = fill!(out, zero(a))
@@ -483,7 +483,7 @@ function _computeblocks(dims::NTuple{N,Int}, costs::NTuple{N,Int},
     end
 
     if minimum(minimum.(bytestrides)) > blocksize
-        return ntuple(n -> 1, N)
+        return ntuple(n -> 1, Val(N))
     end
 
     # reduce dims to find appropriate blocks
