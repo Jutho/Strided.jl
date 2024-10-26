@@ -1,9 +1,16 @@
-function Base.convert(::Type{T}, a::StridedView) where {T<:Array}
-    b = T(undef, size(a))
+function Base.Array(a::StridedView)
+    b = Array{eltype(a)}(undef, size(a))
     copyto!(StridedView(b), a)
     return b
 end
-function Base.convert(::Type{Array}, a::StridedView{T}) where {T}
+
+function (Base.Array{T})(a::StridedView{S,N}) where {T,S,N}
+    b = Array{T}(undef, size(a))
+    copyto!(StridedView(b), a)
+    return b
+end
+
+function (Base.Array{T,N})(a::StridedView{S,N}) where {T,S,N}
     b = Array{T}(undef, size(a))
     copyto!(StridedView(b), a)
     return b

@@ -2,10 +2,12 @@ name: CI (Julia nightly)
 on:
   push:
     branches:
-      - main
-      - workflow_dispatch
-    tags: ['*']
+      - 'master'
+      - 'main'
+      - 'release-'
+    tags: '*'
   pull_request:
+  workflow_dispatch:
 concurrency:
   # Skip intermediate builds: always.
   # Cancel intermediate builds: only if it is a pull request build.
@@ -28,7 +30,7 @@ jobs:
           - x64
     steps:
       - uses: actions/checkout@v4
-      - uses: julia-actions/setup-julia@v1
+      - uses: julia-actions/setup-julia@v2
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
@@ -38,7 +40,7 @@ jobs:
         env:
           JULIA_NUM_THREADS: 4
       - uses: julia-actions/julia-processcoverage@v1
-      - uses: codecov/codecov-action@v3
+      - uses: codecov/codecov-action@v4
         with:
           file: lcov.info
       
