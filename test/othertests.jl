@@ -185,7 +185,7 @@ end
             f = pair -> (pair.first, pair.second)
             f(p)
         end
-        @test x[2] === A1
+        @test x[2] === parent(StridedView(A1))
     end
 end
 
