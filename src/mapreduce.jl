@@ -152,7 +152,7 @@ function _mapreduce_block!((f), (op), (initop),
         _mapreduce_kernel!(f, op, initop, dims, blocks, arrays, strides, offsets)
     elseif op !== nothing && _length(dims, strides[1]) == 1 # complete reduction
         T = eltype(arrays[1])
-        spacing = isbitstype(T) ? min(1, div(64, sizeof(T))) : 1# to avoid false sharing
+        spacing = isbitstype(T) ? max(1, div(64, sizeof(T))) : 1# to avoid false sharing
         threadedout = similar(arrays[1], spacing * get_num_threads())
         a = arrays[1][ParentIndex(1)]
         if initop !== nothing
@@ -202,7 +202,7 @@ function _mapreduce_threaded!((f), (op), (initop),
     else
         i = _lastargmax((dims .- 1) .* costs)
         if costs[i] == 0 || dims[i] <= min(blocks[i], 1024)
-            offset1 = offsets[1] + spacing * (Threads.threadid() - 1)
+            offset1 = offsets[1] + spacing * (taskindex - 1)
             spacedoffsets = (offset1, Base.tail(offsets)...)
             _mapreduce_kernel!(f, op, initop, dims, blocks, arrays, strides, spacedoffsets)
         else

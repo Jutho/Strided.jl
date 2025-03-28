@@ -30,9 +30,9 @@ end
             @test rmul!(B1, 1 // 2) ≈ rmul!(A1, 1 // 2)
             @test lmul!(1 // 3, B2) ≈ lmul!(1 // 3, A2)
             @test axpy!(1 // 3, B1, B2) ≈ axpy!(1 // 3, A1, A2)
-            @test axpy!(1, B1, B3) ≈ axpy!(1, A1, A3)
+            @test axpy!(1, B2, B3) ≈ axpy!(1, A2, A3)
             @test axpby!(1 // 3, B1, 1 // 2, B3) ≈ axpby!(1 // 3, A1, 1 // 2, A3)
-            @test axpby!(1, B1, 1, B3) ≈ axpby!(1, A1, 1, A3)
+            @test axpby!(1, B2, 1, B1) ≈ axpby!(1, A2, 1, A1)
             @test map((x, y, z) -> sin(x) + y / exp(-abs(z)), B1, B2, B3) ≈
                   map((x, y, z) -> sin(x) + y / exp(-abs(z)), A1, A2, A3)
             @test map((x, y, z) -> sin(x) + y / exp(-abs(z)), B1, B2, B3) isa StridedView
