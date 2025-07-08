@@ -1,5 +1,5 @@
 # Methods based on map!
-function Base.copyto!(dst::StridedView{<:Any,N}, src::StridedView{<:Any,N}) where {N}
+function Base.copy!(dst::StridedView{<:Any,N}, src::StridedView{<:Any,N}) where {N}
     return map!(identity, dst, src)
 end
 Base.conj!(a::StridedView{<:Real}) = a
