@@ -115,15 +115,15 @@ end
         @test minimum(real, R1) ≈ minimum(real, StridedView(R1))
         @test sum(x -> real(x) < 0, R1) == sum(x -> real(x) < 0, StridedView(R1))
 
-        R1 = PermutedDimsArray(R1, (randperm(6)...,))
+        R2 = PermutedDimsArray(R1, (randperm(6)...,))
 
-        @test sum(R1) ≈ sum(StridedView(R1))
-        @test maximum(abs, R1) ≈ maximum(abs, StridedView(R1))
-        @test minimum(real, R1) ≈ minimum(real, StridedView(R1))
-        @test sum(x -> real(x) < 0, R1) == sum(x -> real(x) < 0, StridedView(R1))
+        @test sum(R2) ≈ sum(StridedView(R2))
+        @test maximum(abs, R2) ≈ maximum(abs, StridedView(R2))
+        @test minimum(real, R2) ≈ minimum(real, StridedView(R2))
+        @test sum(x -> real(x) < 0, R1) == sum(x -> real(x) < 0, StridedView(R2))
 
-        R2 = rand(T, (5, 5, 5))
-        @test prod(exp, StridedView(R2)) ≈ exp(sum(StridedView(R2)))
+        R3 = rand(T, (5, 5, 5))
+        @test prod(exp, StridedView(R3)) ≈ exp(sum(StridedView(R3)))
     end
 end
 
