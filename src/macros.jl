@@ -53,7 +53,7 @@ macro unsafe_strided(args...)
 
     ex = Expr(:let, Expr(:block, [:($s = Strided.StridedView($s)) for s in syms]...), ex)
     warnex = :(Base.depwarn("`@unsafe_strided A B C ... ex` is deprecated, use `@strided ex` instead.",
-                            Core.Typeof(var"@unsafe_strided").name.mt.name))
+                            Symbol("@unsafe_strided"); force=true))
     return esc(Expr(:block, warnex, ex))
 end
 
