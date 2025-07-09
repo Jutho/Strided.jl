@@ -5,7 +5,7 @@ LinearAlgebra.lmul!(α::Number, dst::StridedView) = mul!(dst, α, dst)
 function LinearAlgebra.mul!(dst::StridedView{<:Number,N}, α::Number,
                             src::StridedView{<:Number,N}) where {N}
     if α == 1
-        copyto!(dst, src)
+        copy!(dst, src)
     else
         dst .= α .* src
     end
@@ -14,7 +14,7 @@ end
 function LinearAlgebra.mul!(dst::StridedView{<:Number,N}, src::StridedView{<:Number,N},
                             α::Number) where {N}
     if α == 1
-        copyto!(dst, src)
+        copy!(dst, src)
     else
         dst .= src .* α
     end
