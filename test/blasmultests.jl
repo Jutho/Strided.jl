@@ -19,7 +19,7 @@ for T1 in (Float32, Float64, Complex{Float32}, Complex{Float64})
                     for op3 in (identity, conj, transpose, adjoint)
                         α = randn(T3)
                         β = randn(T3)
-                        copyto!(A3, A4)
+                        copy!(A3, A4)
                         mul!(op3(B3), op1(B1), op2(B2), α, β)
                         @test B3 ≈ op3(β) * A4 + op3(α * op1(A1) * op2(A2)) # op3 is its own inverse
                     end
@@ -47,7 +47,7 @@ for T1 in (Float32, Float64, Complex{Float32}, Complex{Float64})
                     for op3 in (identity, conj, transpose, adjoint)
                         α = randn(T3)
                         β = randn(T3)
-                        copyto!(A3, A4)
+                        copy!(A3, A4)
                         mul!(op3(B3), op1(B1), op2(B2), α, β)
                         @test B3 ≈ op3(β) * A4 + op3(α * op1(A1) * op2(A2)) # op3 is its own inverse
                     end
@@ -75,7 +75,7 @@ for T1 in (Float32, Float64, Complex{Float32}, Complex{Float64})
                     for op3 in (identity, conj, transpose, adjoint)
                         α = randn(T3)
                         β = randn(T3)
-                        copyto!(A3, A4)
+                        copy!(A3, A4)
                         mul!(op3(B3), op1(B1), op2(B2), α, β)
                         @test B3 ≈ op3(β) * A4 + op3(α * op1(A1) * op2(A2)) # op3 is its own inverse
                     end
