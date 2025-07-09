@@ -6,11 +6,11 @@ Base.conj!(a::StridedView{<:Real}) = a
 Base.conj!(a::StridedView) = map!(conj, a, a)
 function LinearAlgebra.adjoint!(dst::StridedView{<:Any,N},
                                 src::StridedView{<:Any,N}) where {N}
-    return copyto!(dst, adjoint(src))
+    return copy!(dst, adjoint(src))
 end
 function Base.permutedims!(dst::StridedView{<:Any,N}, src::StridedView{<:Any,N},
                            p) where {N}
-    return copyto!(dst, permutedims(src, p))
+    return copy!(dst, permutedims(src, p))
 end
 
 function Base.mapreduce(f, op, A::StridedView; dims=:, kw...)
