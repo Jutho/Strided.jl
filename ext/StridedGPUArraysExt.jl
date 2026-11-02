@@ -5,7 +5,7 @@ using GPUArrays: Adapt, KernelAbstractions
 using GPUArrays.KernelAbstractions: @kernel, @index
 using StridedViews: ParentIndex
 
-import Strided: isblasmatrix, _get_op
+import Strided: _get_op
 
 ALL_FS = Union{typeof(adjoint), typeof(conj), typeof(identity), typeof(transpose)}
 
@@ -161,17 +161,25 @@ function Strided._mapreduce_block!(
     return nothing
 end
 
-function Strided.isblasmatrix(A::GPUStridedView{T, 2}) where {T <: LinearAlgebra.BlasFloat}
-    if A.op == identity
-        # unsafe wrap approach doesn't work if second condition not met
-        return stride(A, 1) == 1 && size(A, 1) == size(parent(A), 1)
-    elseif A.op == conj
-        # this is converted to adjoint
-        # unsafe wrap approach doesn't work if second condition not met
-        return stride(A, 2) == 1 && size(A, 2) == size(parent(A), 2)
-    else # should never happen
-        return false
-    end
+function Strided.getblasmatrix(A::GPUStridedView{T, 2}) where {T <: LinearAlgebra.BlasFloat}
+    A2, CA = Strided._blasview(A)
+    m, n = size(A2)
+    lda = max(stride(A2, 2), m, 1)
+    return view(GPUArrays.derive(T, parent(A2), (lda, n), A2.offset), 1:m, :), CA
+end
+
+_applyblasop(M, c::Char) = c == 'N' ? M : c == 'T' ? transpose(M) : adjoint(M)
+
+function Strided.blas_mul!(
+        C::GPUStridedView{T, 2}, A::GPUStridedView{T, 2}, B::GPUStridedView{T, 2},
+        α::Number, β::Number
+    ) where {T <: LinearAlgebra.BlasFloat}
+    isempty(C) && return C
+    A2, CA = Strided.getblasmatrix(A)
+    B2, CB = Strided.getblasmatrix(B)
+    C2, _ = Strided.getblasmatrix(C) # `_mul!` guarantees `C.op == identity && stride(C, 1) < stride(C, 2)`
+    LinearAlgebra.mul!(C2, _applyblasop(A2, CA), _applyblasop(B2, CB), convert(T, α), convert(T, β))
+    return C
 end
 
 end
