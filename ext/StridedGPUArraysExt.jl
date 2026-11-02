@@ -161,20 +161,24 @@ function Strided._mapreduce_block!(
     return nothing
 end
 
-function _densematrix(A::GPUStridedView{T, 2}) where {T}
-    A2, CA = Strided.getblasmatrix(A)
+function Strided.getblasmatrix(A::GPUStridedView{T, 2}) where {T <: LinearAlgebra.BlasFloat}
+    A2, CA = Strided._blasview(A)
     m, n = size(A2)
     lda = max(stride(A2, 2), m, 1)
-    M = view(GPUArrays.derive(T, parent(A2), (lda, n), A2.offset), 1:m, 1:n)
-    return CA == 'N' ? M : CA == 'T' ? transpose(M) : adjoint(M)
+    return view(GPUArrays.derive(T, parent(A2), (lda, n), A2.offset), 1:m, :), CA
 end
+
+_applyblasop(M, c::Char) = c == 'N' ? M : c == 'T' ? transpose(M) : adjoint(M)
 
 function Strided.blas_mul!(
         C::GPUStridedView{T, 2}, A::GPUStridedView{T, 2}, B::GPUStridedView{T, 2},
         α::Number, β::Number
     ) where {T <: LinearAlgebra.BlasFloat}
     isempty(C) && return C
-    LinearAlgebra.mul!(_densematrix(C), _densematrix(A), _densematrix(B), convert(T, α), convert(T, β))
+    A2, CA = Strided.getblasmatrix(A)
+    B2, CB = Strided.getblasmatrix(B)
+    C2, _ = Strided.getblasmatrix(C) # `_mul!` guarantees `C.op == identity && stride(C, 1) < stride(C, 2)`
+    LinearAlgebra.mul!(C2, _applyblasop(A2, CA), _applyblasop(B2, CB), convert(T, α), convert(T, β))
     return C
 end
 
