@@ -128,6 +128,10 @@ end
     vA2 = view(StridedView(rand(T, (32, 64))), 1:32, 1:2:64)
     vA3 = view(StridedView(rand(T, (64, 32))), 1:2:64, 1:32)
     @test compare((C, A, B) -> mul!(C, A, B, α, β), AT, vA1, vA2, vA3)
+    # empty inner dimension, which only scales `C`
+    A1, A2, A3 = StridedView(rand(T, (4, 4))), StridedView(rand(T, (4, 0))), StridedView(rand(T, (0, 4)))
+    @test compare((C, A, B) -> mul!(C, A, B, α, β), AT, A1, A2, A3)
+    @test compare((C, A, B) -> mul!(C, A, B, α, zero(T)), AT, A1, A2, A3)
 end
 
 @testset "map, scale!, axpy!, axpby! ($AT)" for AT in ATs
