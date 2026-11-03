@@ -54,6 +54,13 @@ function LinearAlgebra.mul!(
         A::StridedView{<:Any, 2}, B::StridedView{<:Any, 2},
         α::Number = true, β::Number = false
     ) where {T}
+    # an empty product only scales `C`, which does not need BLAS; GPU BLAS libraries can not
+    # handle the empty arrays anyway
+    if iszero(size(A, 2))
+        (size(C, 1) == size(A, 1) && size(C, 2) == size(B, 2) && iszero(size(B, 1))) ||
+            throw(DimensionMismatch("A has size $(size(A)), B has size $(size(B)), C has size $(size(C))"))
+        return _scale!(C, β)
+    end
     if !(eltype(C) <: LinearAlgebra.BlasFloat && eltype(A) == eltype(B) == eltype(C))
         return __mul!(C, A, B, α, β)
     end
@@ -71,6 +78,9 @@ function LinearAlgebra.mul!(
     end
     return C
 end
+
+# `C = β * C`, where `β == 0` overwrites `C`, which may contain `NaN`s, e.g. if it is uninitialized
+_scale!(C::StridedView, β::Number) = iszero(β) ? fill!(C, zero(eltype(C))) : rmul!(C, β)
 
 function isblasmatrix(A::StridedView{T, 2}) where {T <: LinearAlgebra.BlasFloat}
     if A.op == identity
@@ -169,7 +179,7 @@ function __mul!(
     C2 = sreshape(C, (m, n, 1))
 
     if α == 0 || k == 0
-        rmul!(C, β)
+        _scale!(C, β)
     elseif α == 1
         if β == 0
             _mapreducedim!(*, +, zero, (m, n, k), (C2, A2, B2))

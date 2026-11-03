@@ -95,6 +95,20 @@ end
     B1 = StridedView(copy(B))
     C1 = StridedView(copy(C))
     @test mul!(C, A, B, α, β) ≈ mul!(C1, A1, B1, α, β)
+
+    # `β = 0` overwrites `C` and ignores `NaN`s, also when the product can not be computed by BLAS
+    for T in (Float64, ComplexF64), op in (identity, conj), α in (zero(T), one(T))
+        A2 = StridedView(rand(T, 2, 0))
+        B2 = StridedView(rand(T, 0, 2))
+        C2 = StridedView(fill(T(NaN), 2, 2))
+        @test iszero(mul!(C2, op(A2), B2, α, zero(T)))
+    end
+    for T in (Float64, ComplexF64), op in (identity, conj)
+        A2 = StridedView(rand(T, 2, 3))
+        B2 = StridedView(rand(T, 3, 2))
+        C2 = StridedView(fill(T(NaN), 2, 2))
+        @test iszero(mul!(C2, op(A2), B2, zero(T), zero(T)))
+    end
 end
 
 # small enough to never be split over threads, such that no tasks need to be spawned
